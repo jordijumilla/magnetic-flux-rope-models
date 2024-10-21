@@ -1,0 +1,7 @@
+venv/
+venv-dev/
+*.pyc
+*.csv
+.vscode/
+**/__pycache__/
+**/.obsidian/

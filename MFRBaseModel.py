@@ -1,0 +1,214 @@
+import abc
+import numpy as np
+import pandas as pd
+import scipy
+import pickle
+import math
+from matplotlib.figure import Figure
+from typing import Self
+
+from MFRModels.RandomNoise import RandomNoise, UniformNoise, GaussianNoise
+from MFRModels.OptimisationEngine import OptimisationParameter
+
+
+class MFRBaseModel():
+    """MFRBaseModel is a Python interface that defines the methods that all magnetic
+    flux rope (MFR) models classes should have."""
+    def __init__(self) -> None:
+        # Physical constants and unit conversions.
+        self.mu_0 = 4 * math.pi * (10 ** (-7))        
+        self.AU_to_m = 149_597_870_700.0
+
+    # @classmethod
+    # def __subclasshook__(cls, subclass):
+    #     return (
+    #         hasattr(subclass, "__init__")
+    #         and callable(subclass.__init__)
+    #         and hasattr(subclass, "_validate_parameters")
+    #         and callable(subclass._validate_parameters)
+    #         or NotImplemented
+    #     )
+    
+    @abc.abstractmethod
+    def __repr__(self) -> str:
+        """Create nice string to display the parameters of the model to the user in a string format."""
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def _validate_parameters(self) -> None:
+        """Validate the parameters of the magnetic flux rope model."""
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def simulate_crossing(self, *agrs, **kwargs):
+        """Simulate a crossing of a spacecraft through the magnetic flux rope."""
+        raise NotImplementedError
+    
+    @abc.abstractmethod
+    def _validate_crossing_parameters(self, *agrs, **kwargs):
+        """Validate the crossing parameters of the spacecraft through the magnetic flux rope."""
+        raise NotImplementedError
+    
+    @abc.abstractmethod
+    def fit(self, *agrs, **kwargs):
+        """Fit the model to a set of observations."""
+        raise NotImplementedError
+
+    def get_noise_generator(self, noise_type: str, epsilon: float) -> RandomNoise:
+        """Provide a random noise generator instance, of the desired type and with the desired parameters."""
+        # Noise options.
+        noise_type = noise_type.lower()
+        self._validate_noise(noise_type, epsilon)
+
+        # Instantiate the noise generator, depending on the noise type desired.
+        if noise_type == "uniform":
+            return UniformNoise(epsilon)
+
+        return GaussianNoise(mu=0, sigma=epsilon)
+
+    def _validate_noise(self, noise_type: str, epsilon: float) -> None:
+        # Parameter: noise_type.
+        if not isinstance(noise_type, str):
+            raise ValueError("Parameter: noise_type must be string or None.")
+        if noise_type != "uniform" and noise_type != "gaussian":
+            raise ValueError(
+                "Parameter: noise_type must be of one of the supported string options: 'uniform' or 'gaussian'."
+            )
+
+        # Parameter: epsilon.
+        if not (epsilon > 0):
+            raise ValueError("Parameter: epsilon must be > 0.")
+        
+    @staticmethod
+    def cartesian_vector_magnitude(v_x: np.ndarray, v_y: np.ndarray, v_z: np.ndarray) -> np.ndarray:
+        return np.sqrt(np.square(v_x) + np.square(v_y) + np.square(v_z))
+    
+    @staticmethod
+    def get_force_density_field_from_unit_right_handed_orthogonal_basis(J_field: np.ndarray, B_field: np.ndarray) -> np.ndarray:
+        """Calculate the force density field (force per unit volume) from the Lorentz equation:
+        
+        F = rho_e * E + J x B
+        
+        Assuming that the electrical term is zero.
+        Arguments are assumed to be expressed in a unit, right-handed & orthogonal vector basis.
+
+        Args:
+            J_field (np.ndarray): Current density field.
+            B_field (np.ndarray): Magnetic field.
+
+        Returns:
+            np.ndarray: _description_
+        """
+        # Lorentz equation: F = J x B (assuming electric field E = 0).
+        return np.cross(J_field, B_field)
+    
+    @staticmethod
+    def _link_3D_axes_view(fig: Figure, ax: np.ndarray) -> callable:
+        def on_move(event) -> None:
+            """Callback function to move any number of figure axis together."""
+            # Start by finding what axis is being moved.
+            moved_axis = None
+            moved_axis_idx = None
+            bFound = False
+            for ax_idx_0, ax_row in enumerate(ax):
+                for ax_idx_1, axis in enumerate(ax_row):
+                    if not bFound and event.inaxes == axis:
+                        moved_axis = axis
+                        moved_axis_idx = (ax_idx_0, ax_idx_1)
+                        bFound = True
+
+            if moved_axis is None:
+                return
+
+            # Apply the same movement to the rest of axis, except for the one that is already being moved.
+            for ax_idx_0, ax_row in enumerate(ax):
+                for ax_idx_1, axis in enumerate(ax_row):
+                    if not (ax_idx_0 == moved_axis_idx[0] and ax_idx_1 == moved_axis_idx[1]):
+                        axis.view_init(elev=moved_axis.elev, azim=moved_axis.azim)
+
+            fig.canvas.draw_idle()
+
+        return on_move
+
+    @staticmethod
+    def evaluate_model_and_crossing(model_class: Self,
+                                    df_observations: pd.DataFrame,
+                                    model_parameters: dict[str, float | None] = {},
+                                    crossing_parameters: dict[str, float | None] = {},
+                                    matching_manitudes: list[str] = [],
+                                    residue_method: str = "MSE") -> tuple[float, Self]:
+        # delta: float, psi: float, n: int, m: int, v_sc: float, y_0: float
+        # Instantiate the EC Model with the given parameters.
+        mfr_model = model_class(**model_parameters)
+
+        # Simulate the crossing.
+        df_test = mfr_model.simulate_crossing(**crossing_parameters)
+
+        if residue_method in ["SE", "MSE", "RMSE"]:
+            residue = np.sum(np.square(df_observations["B_x"] - df_test["B_x"]))
+            residue += np.sum(np.square(df_observations["B_y"] - df_test["B_y"]))
+            residue += np.sum(np.square(df_observations["B_z"] - df_test["B_z"]))
+
+        if residue_method in ["MSE", "RMSE"]:
+            residue /= len(df_observations)
+        
+        if residue_method == "RMSE":
+            residue = math.sqrt(residue)
+
+        return residue, mfr_model
+    
+    @staticmethod
+    def fit(model_class: Self, df_observations: pd.DataFrame, parameters: list[OptimisationParameter], debug: bool = False):
+
+        function_to_optimise: callable = lambda x : model_class.evaluate_model_and_crossing(model_class, df_observations, delta=x[0], psi=0, n=1, m=0, v_sc=450.0, y_0=x[1])[0]
+        initial_parameters: np.ndarray = np.array([0.75, 0.0])
+        # optimisation_result = scipy.optimize.minimize(fun=function_to_optimise, x0=initial_parameters, bounds=[(0.5, 1.0), (-0.9, 0.9)], method="L-BFGS-B", tol=1e-18) # "Nelder-Mead"
+        
+        optimisation_result = scipy.optimize.minimize(fun=function_to_optimise,
+                                                      x0=initial_parameters,
+                                                      bounds=[(0.1, 1.0), (-0.99, 0.99)],
+                                                      method="L-BFGS-B",
+                                                      tol=1e-18,
+                                                      options={"disp": debug})
+
+        if not optimisation_result.success:
+            print("No convergence:")
+            return None
+            #  raise RuntimeError("Optimisation did not converge.")
+        
+        delta_opt = optimisation_result.x[0]
+        y_0_opt = optimisation_result.x[1]
+
+        return model_class(delta=delta_opt, psi=0), optimisation_result
+
+    @staticmethod
+    def _add_pickle_extension(file_path: str) -> str:
+        """Add the pickle extension to the file path if it doesn't already contain it.
+
+        Args:
+            file_path (str): A path to a file.
+
+        Returns:
+            str: Same path, with the pickle extension if it didn't contain it.
+        """
+        if not file_path.endswith((".pkl", ".pickle")):
+            return file_path + ".pkl"
+        return file_path
+
+    def save(self, file_path: str) -> None:
+        """Save the MFR model in pickle format."""
+        file_path_pickle: str = self._add_pickle_extension(file_path)
+        
+        with open(file_path_pickle, "wb") as f:
+            pickle.dump(self, f)
+
+    @staticmethod
+    def load(cls, file_path: str):
+        """Load a MFR model in pickle format."""
+        file_path_pickle: str = cls._add_pickle_extension(file_path)
+
+        with open(file_path_pickle, "rb") as f:
+            model = pickle.load(f)
+        return model
+
+
