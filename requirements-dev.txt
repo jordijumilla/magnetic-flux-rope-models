@@ -1,0 +1,25 @@
+-r requirements-cp310-win_amd64.txt
+
+pytest
+coverage
+pytest-benchmark
+pytest-cov
+responses
+
+black
+flake8
+mypy
+pre-commit
+
+requests_mock
+
+sphinx
+pydata-sphinx-theme
+sphinx-autobuild
+autodoc
+sphinxcontrib-napoleon
+
+build
+hatchling
+twine
+wheel
