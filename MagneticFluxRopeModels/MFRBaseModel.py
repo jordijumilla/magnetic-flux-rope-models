@@ -7,8 +7,8 @@ import math
 from matplotlib.figure import Figure
 from typing import Self
 
-from MFRModels.RandomNoise import RandomNoise, UniformNoise, GaussianNoise
-from MFRModels.OptimisationEngine import OptimisationParameter
+from MagneticFluxRopeModels.RandomNoise import RandomNoise, UniformNoise, GaussianNoise
+from MagneticFluxRopeModels.OptimisationEngine import OptimisationParameter
 
 
 class MFRBaseModel():
@@ -47,11 +47,6 @@ class MFRBaseModel():
     @abc.abstractmethod
     def _validate_crossing_parameters(self, *agrs, **kwargs):
         """Validate the crossing parameters of the spacecraft through the magnetic flux rope."""
-        raise NotImplementedError
-    
-    @abc.abstractmethod
-    def fit(self, *agrs, **kwargs):
-        """Fit the model to a set of observations."""
         raise NotImplementedError
 
     def get_noise_generator(self, noise_type: str, epsilon: float) -> RandomNoise:
@@ -158,28 +153,33 @@ class MFRBaseModel():
         return residue, mfr_model
     
     @staticmethod
-    def fit(model_class: Self, df_observations: pd.DataFrame, parameters: list[OptimisationParameter], debug: bool = False):
+    def fit(model_class: Self, df_observations: pd.DataFrame, parameters: list[OptimisationParameter] = None, debug: bool = False):
 
-        function_to_optimise: callable = lambda x : model_class.evaluate_model_and_crossing(model_class, df_observations, delta=x[0], psi=0, n=1, m=0, v_sc=450.0, y_0=x[1])[0]
-        initial_parameters: np.ndarray = np.array([0.75, 0.0])
-        # optimisation_result = scipy.optimize.minimize(fun=function_to_optimise, x0=initial_parameters, bounds=[(0.5, 1.0), (-0.9, 0.9)], method="L-BFGS-B", tol=1e-18) # "Nelder-Mead"
-        
-        optimisation_result = scipy.optimize.minimize(fun=function_to_optimise,
+        function_to_optimise: callable = lambda x : model_class.evaluate_model_and_crossing(model_class,
+                                                                                            df_observations,
+                                                                                            model_parameters={"delta": x[0], "psi": 0, "n": 1, "m": 0},
+                                                                                            crossing_parameters={"v_sc": 450.0, "y_0": x[1]})[0]
+            
+        bounds = [(0.3, 1.0), (0, 0.95)]
+        initial_parameters: list[float] = [(b[0] + b[1]) / 2 for b in bounds]
+
+
+        x_opt, f_opt, info = scipy.optimize.fmin_l_bfgs_b(func=function_to_optimise,
                                                       x0=initial_parameters,
-                                                      bounds=[(0.1, 1.0), (-0.99, 0.99)],
-                                                      method="L-BFGS-B",
-                                                      tol=1e-18,
-                                                      options={"disp": debug})
+                                                      pgtol=1e-7,
+                                                    #   factr=
+                                                      bounds=bounds,
+                                                      approx_grad=True)
 
-        if not optimisation_result.success:
-            print("No convergence:")
+        if info["warnflag"] != 0:
+            print(f"No convergence: {info["warnflag"]}")
             return None
             #  raise RuntimeError("Optimisation did not converge.")
         
-        delta_opt = optimisation_result.x[0]
-        y_0_opt = optimisation_result.x[1]
+        delta_opt = x_opt[0]
+        y_0_opt = x_opt[1]
 
-        return model_class(delta=delta_opt, psi=0), optimisation_result
+        return model_class(delta=delta_opt, psi=0), y_0_opt, info
 
     @staticmethod
     def _add_pickle_extension(file_path: str) -> str:

@@ -6,8 +6,8 @@ import pandas as pd
 import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib import cm
-from MFRModels.MFRBaseModel import MFRBaseModel
-from MFRModels.RandomNoise import RandomNoise
+from MagneticFluxRopeModels.MFRBaseModel import MFRBaseModel
+from MagneticFluxRopeModels.RandomNoise import RandomNoise
 
 
 class EllipticalCylindricalModel(MFRBaseModel):

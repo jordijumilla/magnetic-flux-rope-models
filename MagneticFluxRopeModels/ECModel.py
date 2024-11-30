@@ -3,13 +3,11 @@
 import numpy as np
 import pandas as pd
 import math
-from MFRModels.EllipticalCylindricalModel import EllipticalCylindricalModel
-from grad_shafranov.timing_utilities import timeit
+from MagneticFluxRopeModels.EllipticalCylindricalModel import EllipticalCylindricalModel
 
 # TODOs:
 # Add multiple n & m terms in the model.
 # Add inclination angle in the crossing.
-# Improve MFR boundary determinatin for crossings.
 
 class ECModel(EllipticalCylindricalModel):
     """
@@ -198,42 +196,43 @@ class ECModel(EllipticalCylindricalModel):
 
 
 def main() -> None:
-    my_ec_model = ECModel(delta=0.7, psi=0.0)
-    my_ec_model.radial_coordinate_sweep(two_fold=True, plot=True)
-    return
+    #my_ec_model = ECModel(delta=0.7, psi=0.0)
+    # my_ec_model.radial_coordinate_sweep(two_fold=True, plot=True)
 
-    my_ec_model.simulate_crossing(v_sc=450, y_0=0.999)
+    # my_ec_model.simulate_crossing(v_sc=450, y_0=0.999)
 
-    # # Make a 2D sweep (radial & angular).
-    my_ec_model.radial_and_angular_sweep(plot=True)
+    # Make a 2D sweep (radial & angular).
+    # my_ec_model.radial_and_angular_sweep(plot=True)
 
-    my_ec_model.plot_boundary(normalise_radial_coordinate=True)
-    print(my_ec_model)
+    # my_ec_model.plot_boundary(normalise_radial_coordinate=True)
+    #print(my_ec_model)
 
-    # # Make a radial sweep.
-    my_ec_model.radial_coordinate_sweep(plot=True, normalise_radial_coordinate=True)
-
-    results = np.zeros((5*9, 4))
-    idx = 0
-    for delta in np.linspace(0.45, 1.0, 5, endpoint=True):
-        for y_0 in np.linspace(0.0, 0.9, 9, endpoint=True):
-            my_ec_model = ECModel(delta=delta, psi=0.0) # , psi=0.0, R=0.05
-            df = my_ec_model.simulate_crossing(v_sc=450.0, y_0=y_0) # , noise_type="gaussian", epsilon=0.05
-            result = ECModel.fit(ECModel, df)
-
-            print(f"Delta = {delta:.3f}, y_0 = {y_0:.3f} --- Opt. delta = {result.x[0]:.3f}, Opt. y_0 = {result.x[1]:.3f}")
-            print(result)
-
-            results[idx, :] = np.array([delta, y_0, result.x[0], result.x[1]])
-            idx += 1
-            
-    
-    df_res = pd.DataFrame(results, columns=["delta", "y_0", "delta_opt", "y_0_opt"])
-    df_res["delta_difference"] = df_res["delta_opt"] - df_res["delta"]
-    df_res["y_0_difference"] = df_res["y_0_opt"] - df_res["y_0"]
-    df_res["success"] = np.logical_and(np.abs(df_res["delta_difference"]) < 1e-3, np.abs(df_res["y_0_difference"]) < 1e-3)
-    df.to_csv("sim_results_2.csv", index=False)
-    print(df_res)
+    # Make a radial sweep.
+    # my_ec_model.radial_coordinate_sweep(plot=True, normalise_radial_coordinate=True)
+    for noise_level in [0.001, 0.005, 0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.10]:
+        print(f"Noise level = {noise_level:.3f}.")
+        n_delta = 9
+        n_y_0 = 9
+        results = np.zeros((n_delta*n_y_0, 4))
+        idx = 0
+        for delta in np.linspace(0.45, 1.0, n_delta, endpoint=True):
+            for y_0 in np.linspace(0.0, 0.9, n_y_0, endpoint=True):
+                my_ec_model = ECModel(delta=delta, psi=0.0) # , psi=0.0, R=0.05
+                df = my_ec_model.simulate_crossing(v_sc=450.0, y_0=y_0, noise_type="gaussian", epsilon=noise_level*my_ec_model.B_z_0)
+                result = ECModel.fit(ECModel, df)
+                if result is not None:
+                    fitted_model, y_0_opt, optimisation_result = result
+                    fitted_deta = fitted_model.delta
+                    print(f"Delta = {delta:.3f}, y_0 = {y_0:.3f} ---> Opt. delta = {fitted_deta:.3f}, Opt. y_0 = {y_0_opt:.3f}")
+                    results[idx, :] = np.array([delta, y_0, fitted_deta, y_0_opt])
+                else:
+                    results[idx, :] = np.array([delta, y_0, 1e9, 1e9])
+                idx += 1
+                
+        
+        df_res = pd.DataFrame(results, columns=["delta", "y_0", "delta_opt", "y_0_opt"])
+        df_res.to_csv(f"sim_results_{noise_level:.3f}.csv", index=False)
+        # print(df_res)
     
     return
     print(df)

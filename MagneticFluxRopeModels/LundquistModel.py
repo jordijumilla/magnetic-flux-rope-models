@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import math
 from scipy.special import jv
-from MFRModels.EllipticalCylindricalModel import EllipticalCylindricalModel
+from MagneticFluxRopeModels.EllipticalCylindricalModel import EllipticalCylindricalModel
 
 
 class LundquistModel(EllipticalCylindricalModel):

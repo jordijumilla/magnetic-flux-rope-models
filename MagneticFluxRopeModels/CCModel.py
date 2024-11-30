@@ -1,4 +1,4 @@
-from MFRModels.ECModel import ECModel
+from MagneticFluxRopeModels.ECModel import ECModel
 
 class CCModel(ECModel):
     """The circular-cylindrical (CC) model is a simplification of the elliptical-cylindrical (EC) model, for which the ellipse is a
