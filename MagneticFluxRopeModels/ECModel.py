@@ -257,7 +257,7 @@ def main() -> None:
     my_ec_model.plot_vs_time(df, ["J_x", "J_y", "J_z", "J"], colour=["r", "g", "b", "k"], time_units="h")
     return
 
-    print(basis)
+    # print(basis)
 
     # print(f"{basis[:, 0]=}")
     # scale_factors = my_ec_model.compute_scale_factors(r=my_ec_model.R, phi=phi)
