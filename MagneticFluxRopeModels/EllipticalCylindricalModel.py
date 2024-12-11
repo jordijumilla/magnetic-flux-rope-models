@@ -3,11 +3,11 @@ import math
 import matplotlib
 import numpy as np
 import pandas as pd
-import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib import cm
 from MagneticFluxRopeModels.MFRBaseModel import MFRBaseModel
 from MagneticFluxRopeModels.RandomNoise import RandomNoise
+import datetime
 
 
 class EllipticalCylindricalModel(MFRBaseModel):
@@ -189,7 +189,12 @@ class EllipticalCylindricalModel(MFRBaseModel):
         cartesian_vector = self.convert_elliptical_to_cartesian_vector(v_r, v_phi, v_z, r, phi)
         return self.cartesian_vector_magnitude(cartesian_vector[:, 0], cartesian_vector[:, 1], cartesian_vector[:, 2])
 
-    def radial_coordinate_sweep(self, phi: float = 0, num_points: int = 51, normalise_radial_coordinate: bool = False, two_fold: bool = False, plot: bool = False) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def radial_coordinate_sweep(self, phi: float = 0,
+                                num_points: int = 51,
+                                normalise_radial_coordinate: bool = False,
+                                two_fold: bool = False,
+                                plot: bool = False,
+                                fig_size: tuple[float, float] | None = None) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         r_range: np.ndarray = np.linspace(0, self.R, num_points, endpoint=True)
         phi_range: np.ndarray = phi * np.ones_like(r_range)
         B_field: np.ndarray = np.zeros((len(r_range), 3))
@@ -230,7 +235,7 @@ class EllipticalCylindricalModel(MFRBaseModel):
             radial_label = "r [AU]"
 
         if plot:
-            fig, ax = plt.subplots(3, 1, tight_layout=True)
+            fig, ax = plt.subplots(3, 1, tight_layout=True, figsize=fig_size)
             ax[0].plot(r_range, B_poloidal)
             ax[0].plot(r_range, B_z)
             ax[0].plot(r_range, B_magnitude)
@@ -264,7 +269,12 @@ class EllipticalCylindricalModel(MFRBaseModel):
 
         return r_range, B_field, J_field
     
-    def radial_and_angular_sweep(self, r_num_points: int = 51, phi_num_points: int = 51, normalise_radial_coordinate: bool = False, plot: bool = False) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    def radial_and_angular_sweep(self,
+                                 r_num_points: int = 51,
+                                 phi_num_points: int = 51,
+                                 normalise_radial_coordinate: bool = False,
+                                 plot: bool = False,
+                                 fig_size: tuple[float, float] | None = None) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """Make a radial (r) and angular (phi) sweep of the magnetic field (B) and current density (J).
 
         Args:
@@ -314,7 +324,7 @@ class EllipticalCylindricalModel(MFRBaseModel):
 
         if plot:
             # Make the 3D plot of the poloidal and axial magnetic field.
-            fig, ax = plt.subplots(2, 2, figsize=(10, 10), subplot_kw={"projection": "3d"})
+            fig, ax = plt.subplots(2, 2, figsize=fig_size, subplot_kw={"projection": "3d"})
 
             B_phi_abs = np.abs(B_phi)
             norm_1 = matplotlib.colors.Normalize(vmin=np.min(B_phi_abs), vmax=np.max(B_phi_abs))
@@ -374,14 +384,20 @@ class EllipticalCylindricalModel(MFRBaseModel):
         return r_range, phi_range
 
     def plot_boundary(
-        self, boundary: np.ndarray | None = None, vector_dict: dict[str, tuple[np.ndarray, np.ndarray]] = {}, normalise_radial_coordinate: bool = False
+        self, boundary: np.ndarray | None = None,
+        vector_dict: dict[str, tuple[np.ndarray, np.ndarray]] | None = None,
+        normalise_radial_coordinate: bool = False,
+        fig_size: tuple[float, float] | None = None
     ) -> None:
         if boundary is None:
             boundary = self.get_boundary()
+        
+        if vector_dict is None:
+            vector_dict = dict()
 
         scale_factor: float = 1 / self.R if normalise_radial_coordinate else 1.0
 
-        fig, ax = plt.subplots()
+        fig, ax = plt.subplots(tight_layout=True, figsize=fig_size)
         ax.plot(boundary[:, 0] * scale_factor, boundary[:, 1] * scale_factor)
 
         for vector_origin, vector_end in vector_dict.values():
@@ -496,9 +512,14 @@ class EllipticalCylindricalModel(MFRBaseModel):
         if not (num_points >= 5):
             raise ValueError("Parameter: num_points must be >= 5.")
 
-    def simulate_crossing(
-        self, v_sc: float, y_0: float = 0.0, num_points: int = 51, noise_type: str | None = None, epsilon: float = 0.05
-    ) -> pd.DataFrame:
+    def simulate_crossing(self,
+                          v_sc: float,
+                          y_0: float = 0.0,
+                          num_points: int = 51,
+                          noise_type: str | None = None,
+                          epsilon: float = 0.05,
+                          initial_time: float = 0.0,
+                          initial_datetime: datetime.datetime | None = None) -> pd.DataFrame:
         """Simulate the crossing of a spacecraft (S/C) through the magnetic flux rope. Simulate the measurements of the S/C through it.
         Currently, only straight trajectories at constant speed are supported.
 
@@ -567,7 +588,9 @@ class EllipticalCylindricalModel(MFRBaseModel):
 
         # Join all the simulated measurements on a pandas data frame.
         df = pd.DataFrame()
-        df["time"] = time_range
+        df["time"] = initial_time + time_range
+        if initial_datetime is not None:
+            df["datetime"] = initial_datetime + pd.to_timedelta(time_range, unit="s")
         df["x"] = x_tajectory
         df["y"] = y_trajectory
         df["z"] = z_trajectory
@@ -582,7 +605,15 @@ class EllipticalCylindricalModel(MFRBaseModel):
 
         return df
 
-    def plot_vs_time(self, data: pd.DataFrame, magnitude_names: str | list[str], colour: str | list[str], time_units: str = "s") -> None:
+    def plot_vs_time(self,
+                     data: pd.DataFrame,
+                     magnitude_names: str | list[str],
+                     colour: str | list[str],
+                     time_units: str = "s",
+                     datetime_axis: bool = False,
+                     marker: str = "o",
+                     linestyle: str = "-",
+                     markersize: str = 4) -> None:
         if isinstance(magnitude_names, str):
             magnitude_names = [magnitude_names]
         
@@ -590,25 +621,31 @@ class EllipticalCylindricalModel(MFRBaseModel):
             colour = [colour]
 
         # Extract the time from the dataframe.
-        time = data["time"].to_numpy(copy=True)
-        if time_units in {"min", "minute"}:
-            time /= 60
-        elif time_units in {"h", "hour"}:
-            time /= 60 * 60
-        elif time_units == "day":
-            time /= 24 * 60 * 60
+        if not datetime_axis:
+            time = data["time"].to_numpy(copy=True)
+            if time_units in {"min", "minute"}:
+                time /= 60
+            elif time_units in {"h", "hour"}:
+                time /= 60 * 60
+            elif time_units == "day":
+                time /= 24 * 60 * 60
+        else:
+            time = data["datetime"]
 
         time_min = np.min(time)
         time_max = np.max(time)
 
-        fig, ax = plt.subplots(1, 1, tight_layout=True)
+        _, ax = plt.subplots(1, 1, tight_layout=True)
 
         for idx, magnitude_name in enumerate(magnitude_names):
             # Extract the magnitude to plot from the dataframe, and its units.
             magnitude_to_plot = data[magnitude_name].to_numpy(copy=True)
             magnitude_units = self._units[magnitude_name]
-            ax.plot(time, magnitude_to_plot, "-", color=colour[idx])
-            ax.set_xlabel(f"time [{time_units}]")
+            ax.plot(time, magnitude_to_plot, marker=marker, linestyle=linestyle, markersize=markersize, color=colour[idx])
+            if datetime_axis:
+                ax.set_xlabel("datetime")
+            else:
+                ax.set_xlabel(f"time [{time_units}]")
             ax.set_ylabel(f"${magnitude_name}$ [{magnitude_units}]")
             ax.grid(alpha=0.35)
             ax.set_xlim(time_min, time_max)

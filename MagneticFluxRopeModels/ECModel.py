@@ -98,7 +98,6 @@ class ECModel(EllipticalCylindricalModel):
             "J_y": "pA",
             "J_z": "pA",
             "time": "s",
-            "J": "pA",
             "pressure": "nPa",
         }
 

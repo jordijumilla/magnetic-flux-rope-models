@@ -153,12 +153,13 @@ class MFRBaseModel():
         return residue, mfr_model
     
     @staticmethod
-    def fit(model_class: Self, df_observations: pd.DataFrame, parameters: list[OptimisationParameter] = None, debug: bool = False):
+    def fit(model_class: Self, df_observations: pd.DataFrame, parameters: list[OptimisationParameter] | None = None, debug: bool = False):
 
-        function_to_optimise: callable = lambda x : model_class.evaluate_model_and_crossing(model_class,
-                                                                                            df_observations,
-                                                                                            model_parameters={"delta": x[0], "psi": 0, "n": 1, "m": 0},
-                                                                                            crossing_parameters={"v_sc": 450.0, "y_0": x[1]})[0]
+        def function_to_optimise(x):
+            model_class.evaluate_model_and_crossing(model_class,
+                                                    df_observations,
+                                                    model_parameters={"delta": x[0], "psi": 0, "n": 1, "m": 0},
+                                                    crossing_parameters={"v_sc": 450.0, "y_0": x[1]})[0]
             
         bounds = [(0.3, 1.0), (0, 0.95)]
         initial_parameters: list[float] = [(b[0] + b[1]) / 2 for b in bounds]

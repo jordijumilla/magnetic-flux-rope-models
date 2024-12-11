@@ -1,6 +1,4 @@
 import numpy as np
-import pandas as pd
-import math
 from scipy.special import jv
 from MagneticFluxRopeModels.EllipticalCylindricalModel import EllipticalCylindricalModel
 
@@ -55,7 +53,6 @@ class LundquistModel(EllipticalCylindricalModel):
             "J_y": "pA",
             "J_z": "pA",
             "time": "s",
-            "J": "pA",
             "pressure": "nPa",
         }
 

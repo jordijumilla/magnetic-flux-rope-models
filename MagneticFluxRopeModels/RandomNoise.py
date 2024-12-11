@@ -10,7 +10,7 @@ class RandomNoise:
         # This seed is important to obtain repeatable results.
         self._random_seed: int = random_seed
 
-    def generate_noise(self, num_samples: int) -> np.array:
+    def generate_noise(self, num_samples: int) -> np.ndarray:
         raise NotImplementedError
 
 
@@ -19,7 +19,7 @@ class UniformNoise(RandomNoise):
         super().__init__()
         self.epsilon: float = epsilon
 
-    def generate_noise(self, num_samples: int) -> np.array:
+    def generate_noise(self, num_samples: int) -> np.ndarray:
         """Generate num_samples of uniformly distributed noise."""
         return self.epsilon * (2 * self.random_number_generator.random(num_samples) - 1)
 
