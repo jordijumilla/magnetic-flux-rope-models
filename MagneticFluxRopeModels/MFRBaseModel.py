@@ -128,16 +128,20 @@ class MFRBaseModel():
     @staticmethod
     def evaluate_model_and_crossing(model_class: Self,
                                     df_observations: pd.DataFrame,
+                                    residue_method: str,
                                     model_parameters: dict[str, float | None] = {},
                                     crossing_parameters: dict[str, float | None] = {},
-                                    matching_manitudes: list[str] = [],
-                                    residue_method: str = "MSE") -> tuple[float, Self]:
+                                    matching_manitudes: list[str] = []) -> tuple[float | None, Self | None]:
         # delta: float, psi: float, n: int, m: int, v_sc: float, y_0: float
         # Instantiate the EC Model with the given parameters.
         mfr_model = model_class(**model_parameters)
 
         # Simulate the crossing.
-        df_test = mfr_model.simulate_crossing(**crossing_parameters)
+        df_test: pd.DataFrame | None = mfr_model.simulate_crossing(**crossing_parameters)
+
+        if df_test is None:
+            # There is no intersection.
+            return 1e9, None
 
         if residue_method in ["SE", "MSE", "RMSE"]:
             residue = np.sum(np.square(df_observations["B_x"] - df_test["B_x"]))
@@ -153,34 +157,62 @@ class MFRBaseModel():
         return residue, mfr_model
     
     @staticmethod
-    def fit(model_class: Self, df_observations: pd.DataFrame, parameters: list[OptimisationParameter] | None = None, debug: bool = False):
+    def fit(model_class: Self,
+            df_observations: pd.DataFrame,
+            model_parameters: dict,
+            crossing_parameters: dict,
+            debug: bool = False,
+            residue_method: str = "MSE"):
+        
+        # Parse the model and crossing parameters
+        model_parameters_parsed: list[OptimisationParameter] = [OptimisationParameter(name=parameter_name, options=parameter_options) for parameter_name, parameter_options in model_parameters.items()]
+        crossing_parameters_parsed: list[OptimisationParameter] = [OptimisationParameter(name=parameter_name, options=parameter_options) for parameter_name, parameter_options in crossing_parameters.items()]
 
-        def function_to_optimise(x):
-            model_class.evaluate_model_and_crossing(model_class,
-                                                    df_observations,
-                                                    model_parameters={"delta": x[0], "psi": 0, "n": 1, "m": 0},
-                                                    crossing_parameters={"v_sc": 450.0, "y_0": x[1]})[0]
+        # Split the parameters between optimised and fixed.
+        model_parameters_to_optimise = [p for p in model_parameters_parsed if p.mode == "optimised"]
+        model_parameters_fixed = {p.name: p.fixed_value for p in model_parameters_parsed if p.mode == "fixed"}
+
+        crossing_parameters_to_optimise = [p for p in crossing_parameters_parsed if p.mode == "optimised"]
+        crossing_parameters_fixed = {p.name: p.fixed_value for p in crossing_parameters_parsed if p.mode == "fixed"}
+
+        def function_to_optimise(x: list[float]) -> float:
+            # Assign each of the optimising variables to its corresponding parameter.
+            model_kw_parameters = {p.name: x[idx] for idx, p in enumerate(model_parameters_to_optimise)} | model_parameters_fixed 
+
+            n_offset: int = len(model_parameters_to_optimise)
+            crossing_kw_parameters = {p.name: x[n_offset + idx] for idx, p in enumerate(crossing_parameters_to_optimise)} | crossing_parameters_fixed
+
+            residue, _ = model_class.evaluate_model_and_crossing(model_class,
+                                                                 df_observations,
+                                                                 model_parameters=model_kw_parameters,
+                                                                 crossing_parameters=crossing_kw_parameters,
+                                                                 residue_method=residue_method)
+            return residue
             
-        bounds = [(0.3, 1.0), (0, 0.95)]
-        initial_parameters: list[float] = [(b[0] + b[1]) / 2 for b in bounds]
-
+        bounds = [(p.bounds[0], p.bounds[1]) for p in model_parameters_to_optimise] + [(p.bounds[0], p.bounds[1]) for p in crossing_parameters_to_optimise]
+        initial_parameters: list[float] = [p.initial_value for p in model_parameters_to_optimise] + [p.initial_value for p in crossing_parameters_to_optimise]
+        #[(b[0] + b[1]) / 2 for b in bounds]
 
         x_opt, f_opt, info = scipy.optimize.fmin_l_bfgs_b(func=function_to_optimise,
-                                                      x0=initial_parameters,
-                                                      pgtol=1e-7,
-                                                    #   factr=
-                                                      bounds=bounds,
-                                                      approx_grad=True)
+                                                          x0=initial_parameters,
+                                                          pgtol=1e-9,
+                                                          bounds=bounds,
+                                                          approx_grad=True)
+        
+        info["f_opt"] = f_opt
+        if debug:
+            print(info)
 
         if info["warnflag"] != 0:
             print(f"No convergence: {info["warnflag"]}")
             return None
             #  raise RuntimeError("Optimisation did not converge.")
-        
-        delta_opt = x_opt[0]
-        y_0_opt = x_opt[1]
 
-        return model_class(delta=delta_opt, psi=0), y_0_opt, info
+        model_parameters_opt = {p.name: x_opt[idx] for idx, p in enumerate(model_parameters_to_optimise)} | model_parameters_fixed
+        n_offset: int = len(model_parameters_to_optimise)
+        crossing_parameters_opt = {p.name: x_opt[n_offset + idx] for idx, p in enumerate(crossing_parameters_to_optimise)}| crossing_parameters_fixed
+
+        return model_class(**model_parameters_opt), crossing_parameters_opt, info
 
     @staticmethod
     def _add_pickle_extension(file_path: str) -> str:
