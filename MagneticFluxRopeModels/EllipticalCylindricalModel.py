@@ -24,9 +24,6 @@ class EllipticalCylindricalModel(MFRBaseModel):
         # Validate these parameters
         self._validate_elliptical_cylindrical_parameters()
 
-        # Convert units (needs to be done after parameter validation).
-        self.psi = math.radians(self.psi)
-
         # Calculate the derived geometrical magnitudes.
         self._calculate_derived_parameters()
 
@@ -166,7 +163,7 @@ class EllipticalCylindricalModel(MFRBaseModel):
     
     def get_h(self, phi: float) -> float:
         """Calculate the "h" factor, defined so that (h_phi)^2 = r^2 * h^2 (eq. 5 in the paper).
-        Note that h is not constant, but a function of phi."""
+        Note that h is not constant, but a function of phi. Also note that h is never zero."""
         sin_phi: float = math.sin(phi)
         cos_phi: float = math.cos(phi)
         return math.sqrt(self.delta_squared * sin_phi * sin_phi + cos_phi * cos_phi)
@@ -427,7 +424,7 @@ class EllipticalCylindricalModel(MFRBaseModel):
         plt.title("Magnetic flux rope boundary")
         plt.show()
 
-    def _resolve_trajectory(self, v_sc: float, y_0: float, num_points: int) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    def _resolve_trajectory(self, v_sc: float, y_0: float, num_points: int) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, bool]:
         """Resolve the entry and exit points of the S/C in the magnetic flux rope.
 
         Args:
@@ -439,7 +436,7 @@ class EllipticalCylindricalModel(MFRBaseModel):
             ValueError: _description_
 
         Returns:
-            tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]: _description_
+            tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, bool]: _description_
         """
         # Start by finding the rope limits. We solve analitically for the intersection of the trajectory
         # with the elliptical cylinder.
@@ -460,8 +457,13 @@ class EllipticalCylindricalModel(MFRBaseModel):
         # We note that for the circular-cylindrical case (delta = 1), we get a solution that suits what we would expect:
         # psi = arctan(cotan(0)) +- arccos(y_0 / R) = (pi / 2) +- arccos(y_0 / R)
 
+        # Start by checking whether the S/C crosses the flux rope.
+        h: float = self.get_h(self.psi)
+        if abs(y_0 / h) > 1:
+            return [], [], [], [], False
+
         phi_middle: float = math.atan2(1, self.delta * math.tan(self.psi))
-        phi_increment: float = math.acos(y_0 / self.get_h(self.psi))
+        phi_increment: float = math.acos(y_0 / h)
 
         phi_entry: float = phi_middle + phi_increment
         phi_exit: float = phi_middle - phi_increment
@@ -482,20 +484,7 @@ class EllipticalCylindricalModel(MFRBaseModel):
         y_trajectory: np.ndarray = y_0 * self.R * np.ones((num_points))
         z_trajectory: np.ndarray = np.zeros((num_points))
 
-        return time_range, x_tajectory, y_trajectory, z_trajectory
-
-    def _resolve_trajectory_2(self, v_sc: float, y_0: float) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-        phi_middle: float = math.atan2(1, self.delta * math.tan(self.psi))
-        phi_increment: float = math.acos(y_0 / self.get_h(self.psi))
-
-        phi_entry: float = phi_middle - phi_increment
-        phi_exit: float = phi_middle + phi_increment
-
-        entry_point = self.convert_elliptical_to_cartesian_cordinates(r=self.R, phi=phi_entry, z=0)
-        exit_point = self.convert_elliptical_to_cartesian_cordinates(r=self.R, phi=phi_exit, z=0)
-
-        return entry_point[0], exit_point[0]
-
+        return time_range, x_tajectory, y_trajectory, z_trajectory, True
 
     def _validate_crossing_parameters(self, y_0: float, num_points: int) -> None:
         # Parameter: y_0.
@@ -519,7 +508,7 @@ class EllipticalCylindricalModel(MFRBaseModel):
                           noise_type: str | None = None,
                           epsilon: float = 0.05,
                           initial_time: float = 0.0,
-                          initial_datetime: datetime.datetime | None = None) -> pd.DataFrame:
+                          initial_datetime: datetime.datetime | None = None) -> pd.DataFrame | None:
         """Simulate the crossing of a spacecraft (S/C) through the magnetic flux rope. Simulate the measurements of the S/C through it.
         Currently, only straight trajectories at constant speed are supported.
 
@@ -543,7 +532,10 @@ class EllipticalCylindricalModel(MFRBaseModel):
         v_sc_metres_per_second: float = v_sc * 1_000
 
         # Start by resolving the geometrical trajectory of the spacecraft.
-        time_range, x_tajectory, y_trajectory, z_trajectory = self._resolve_trajectory(v_sc_metres_per_second, y_0, num_points)
+        time_range, x_tajectory, y_trajectory, z_trajectory, does_intersect = self._resolve_trajectory(v_sc_metres_per_second, y_0, num_points)
+
+        if not does_intersect:
+            return None
 
         # Initialise the magnetic and current density field arrays.
         B_field = np.zeros((num_points, 3))

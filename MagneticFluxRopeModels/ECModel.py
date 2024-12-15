@@ -245,7 +245,6 @@ def main() -> None:
     # # Make a 2D sweep (radial & angular).
     # my_ec_model.radial_and_angular_sweep(bPlot=True)
 
-    # phi = math.radians(0)
     # point = my_ec_model.convert_elliptical_to_cartesian_cordinates(r=my_ec_model.R, phi=phi, z=0)
     # basis = my_ec_model.get_elliptical_unit_basis(r=my_ec_model.R, phi=phi)
 
