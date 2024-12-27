@@ -586,14 +586,22 @@ class EllipticalCylindricalModel(MFRBaseModel):
         df["x"] = x_tajectory
         df["y"] = y_trajectory
         df["z"] = z_trajectory
+
         df["B_x"] = B_field[:, 0]
         df["B_y"] = B_field[:, 1]
         df["B_z"] = B_field[:, 2]
         df["B"] = self.cartesian_vector_magnitude(B_field[:, 0], B_field[:, 1], B_field[:, 2])
+        
         df["J_x"] = J_field[:, 0]
         df["J_y"] = J_field[:, 1]
         df["J_z"] = J_field[:, 2]
         df["J"] = self.cartesian_vector_magnitude(J_field[:, 0], J_field[:, 1], J_field[:, 2])
+
+        F_field = self.get_force_density_field_elliptical_coordinates(B_field=B_field, J_field=J_field)
+        df["F_x"] = F_field[:, 0]
+        df["F_y"] = F_field[:, 1]
+        df["F_z"] = F_field[:, 2]
+        df["F"] = self.cartesian_vector_magnitude(F_field[:, 0], F_field[:, 1], F_field[:, 2])
 
         return df
 
