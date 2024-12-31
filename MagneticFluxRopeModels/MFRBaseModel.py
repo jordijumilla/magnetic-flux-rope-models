@@ -136,6 +136,9 @@ class MFRBaseModel():
         # Instantiate the EC Model with the given parameters.
         mfr_model = model_class(**model_parameters)
 
+        # Use the same number of points for the fitting as the incoming observations.
+        crossing_parameters["num_points"] = len(df_observations)
+
         # Simulate the crossing.
         df_test: pd.DataFrame | None = mfr_model.simulate_crossing(**crossing_parameters)
 
