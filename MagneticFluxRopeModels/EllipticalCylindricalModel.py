@@ -1,6 +1,7 @@
 import abc
 import math
 import matplotlib
+import matplotlib.axis
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -46,8 +47,8 @@ class EllipticalCylindricalModel(MFRBaseModel):
         if not isinstance(self.psi, (int, float)):
             raise TypeError("Parameter: psi must be an integer or float.")
 
-        if not (0 <= self.psi < 180):
-            raise ValueError("Parameter: psi must be in [0, 180).")
+        if not (0 <= self.psi < math.pi):
+            raise ValueError("Parameter: psi must be in [0, pi).")
 
     def _calculate_derived_parameters(self):
         # Delta-related magnitudes:
@@ -583,6 +584,7 @@ class EllipticalCylindricalModel(MFRBaseModel):
         df["time"] = initial_time + time_range
         if initial_datetime is not None:
             df["datetime"] = initial_datetime + pd.to_timedelta(time_range, unit="s")
+
         df["x"] = x_tajectory
         df["y"] = y_trajectory
         df["z"] = z_trajectory
@@ -591,7 +593,7 @@ class EllipticalCylindricalModel(MFRBaseModel):
         df["B_y"] = B_field[:, 1]
         df["B_z"] = B_field[:, 2]
         df["B"] = self.cartesian_vector_magnitude(B_field[:, 0], B_field[:, 1], B_field[:, 2])
-        
+
         df["J_x"] = J_field[:, 0]
         df["J_y"] = J_field[:, 1]
         df["J_z"] = J_field[:, 2]
@@ -613,12 +615,15 @@ class EllipticalCylindricalModel(MFRBaseModel):
                      datetime_axis: bool = False,
                      marker: str = "o",
                      linestyle: str = "-",
-                     markersize: str = 4) -> None:
+                     markersize: str = 4,
+                     ax: matplotlib.axis.Axis| None = None) -> None | matplotlib.axis.Axis:
         if isinstance(magnitude_names, str):
             magnitude_names = [magnitude_names]
         
         if isinstance(colour, str):
             colour = [colour]
+
+        axis_provided: bool = ax is not None
 
         # Extract the time from the dataframe.
         if not datetime_axis:
@@ -635,7 +640,8 @@ class EllipticalCylindricalModel(MFRBaseModel):
         time_min = np.min(time)
         time_max = np.max(time)
 
-        _, ax = plt.subplots(1, 1, tight_layout=True)
+        if not axis_provided:
+            _, ax = plt.subplots(1, 1, tight_layout=True)
 
         for idx, magnitude_name in enumerate(magnitude_names):
             # Extract the magnitude to plot from the dataframe, and its units.
@@ -652,7 +658,11 @@ class EllipticalCylindricalModel(MFRBaseModel):
             # plt.gcf().axes[0].yaxis.get_major_formatter().set_scientific(False)
 
         plt.legend([f"${mag}$" for mag in magnitude_names])
-        plt.show()
+
+        if not axis_provided:
+            plt.show()
+        else:
+            return ax
         
     @abc.abstractmethod
     def get_magnetic_field_elliptical_coordinates(self, r: float, phi: float) -> np.ndarray:

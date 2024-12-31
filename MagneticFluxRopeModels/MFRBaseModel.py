@@ -1,11 +1,12 @@
 import abc
 import numpy as np
 import pandas as pd
-import scipy
 import pickle
 import math
+import time
 from matplotlib.figure import Figure
 from typing import Self
+from scipy.optimize import fmin_l_bfgs_b
 
 from MagneticFluxRopeModels.RandomNoise import RandomNoise, UniformNoise, GaussianNoise
 from MagneticFluxRopeModels.OptimisationEngine import OptimisationParameter
@@ -164,9 +165,12 @@ class MFRBaseModel():
             df_observations: pd.DataFrame,
             model_parameters: dict,
             crossing_parameters: dict,
-            debug: bool = False,
-            residue_method: str = "MSE"):
-        
+            residue_method: str = "MSE",
+            timeit: bool = False):
+        # If the user wants timing information, start a time counter.
+        if timeit:
+            t1 = time.perf_counter()
+
         # Parse the model and crossing parameters
         model_parameters_parsed: list[OptimisationParameter] = [OptimisationParameter(name=parameter_name, options=parameter_options) for parameter_name, parameter_options in model_parameters.items()]
         crossing_parameters_parsed: list[OptimisationParameter] = [OptimisationParameter(name=parameter_name, options=parameter_options) for parameter_name, parameter_options in crossing_parameters.items()]
@@ -194,28 +198,34 @@ class MFRBaseModel():
             
         bounds = [(p.bounds[0], p.bounds[1]) for p in model_parameters_to_optimise] + [(p.bounds[0], p.bounds[1]) for p in crossing_parameters_to_optimise]
         initial_parameters: list[float] = [p.initial_value for p in model_parameters_to_optimise] + [p.initial_value for p in crossing_parameters_to_optimise]
-        #[(b[0] + b[1]) / 2 for b in bounds]
 
-        x_opt, f_opt, info = scipy.optimize.fmin_l_bfgs_b(func=function_to_optimise,
-                                                          x0=initial_parameters,
-                                                          pgtol=1e-9,
-                                                          bounds=bounds,
-                                                          approx_grad=True)
+        # Call the optimiser.
+        x_opt, f_opt, info = fmin_l_bfgs_b(func=function_to_optimise, x0=initial_parameters, pgtol=1e-9, bounds=bounds, approx_grad=True)
         
+        # Populate the info with the optimisation results, for debug purposes.
+        info["x_opt"] = x_opt
         info["f_opt"] = f_opt
-        if debug:
-            print(info)
 
+        # Check if there is convergence.
         if info["warnflag"] != 0:
-            print(f"No convergence: {info["warnflag"]}")
-            return None
-            #  raise RuntimeError("Optimisation did not converge.")
+            print(f"Optimisation did not converge: {info["warnflag"]}.")
+            return None, None, info
 
         model_parameters_opt = {p.name: x_opt[idx] for idx, p in enumerate(model_parameters_to_optimise)} | model_parameters_fixed
         n_offset: int = len(model_parameters_to_optimise)
         crossing_parameters_opt = {p.name: x_opt[n_offset + idx] for idx, p in enumerate(crossing_parameters_to_optimise)}| crossing_parameters_fixed
+        crossing_parameters_opt["num_points"] = len(df_observations)
 
-        return model_class(**model_parameters_opt), crossing_parameters_opt, info
+        fitted_model = model_class(**model_parameters_opt)
+
+        # Output the fitted simulated dataset.
+        fitted_df: pd.DataFrame = fitted_model.simulate_crossing(**crossing_parameters_opt)
+
+        if timeit:
+            t2 = time.perf_counter()
+            info["fitting_time"] = t2 - t1
+
+        return fitted_model, crossing_parameters_opt, fitted_df, info
 
     @staticmethod
     def _add_pickle_extension(file_path: str) -> str:

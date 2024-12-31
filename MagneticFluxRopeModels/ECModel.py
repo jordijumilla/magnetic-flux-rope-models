@@ -146,15 +146,15 @@ class ECModel(EllipticalCylindricalModel):
         """Create nice string to display the parameters of the model to the user in a string format."""
         return f"""ECModel with parameters:
         - Geometrical:
-            - delta = {self.delta:.2f}
-            - psi = {math.degrees(self.psi):.2f} deg
-            - R = {self.R:.2f} AU
+            - delta = {self.delta:.3f}
+            - psi = {math.degrees(self.psi):.3f} deg
+            - R = {self.R:.3f} AU
         - Field:
             - n = {self.n}
             - m = {self.m}
-            - tau = {self.tau}
-            - C_nm = {self.C_nm}
-            - B_z_0 = {self.B_z_0}
+            - tau = {self.tau:.3f}
+            - C_nm = {self.C_nm:.3f}
+            - B_z_0 = {self.B_z_0:.3f} nT
             - handedness = {self.handedness}."""
 
     def get_magnetic_field_elliptical_coordinates(self, r: float, phi: float) -> np.ndarray:
@@ -195,7 +195,10 @@ class ECModel(EllipticalCylindricalModel):
 
 
 def main() -> None:
-    #my_ec_model = ECModel(delta=0.7, psi=0.0)
+    my_ec_model = ECModel(delta=0.7, psi=0.0)
+    df = my_ec_model.simulate_crossing(v_sc=450, y_0=0)
+    print(df)
+    return
     # my_ec_model.radial_coordinate_sweep(two_fold=True, plot=True)
 
     # my_ec_model.simulate_crossing(v_sc=450, y_0=0.999)
