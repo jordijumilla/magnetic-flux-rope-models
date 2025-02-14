@@ -50,7 +50,7 @@ class MFRBaseModel():
         """Validate the crossing parameters of the spacecraft through the magnetic flux rope."""
         raise NotImplementedError
 
-    def get_noise_generator(self, noise_type: str, epsilon: float) -> RandomNoise:
+    def get_noise_generator(self, noise_type: str, epsilon: float, random_seed: int = 0) -> RandomNoise:
         """Provide a random noise generator instance, of the desired type and with the desired parameters."""
         # Noise options.
         noise_type = noise_type.lower()
@@ -58,9 +58,9 @@ class MFRBaseModel():
 
         # Instantiate the noise generator, depending on the noise type desired.
         if noise_type == "uniform":
-            return UniformNoise(epsilon)
+            return UniformNoise(epsilon, random_seed=random_seed)
 
-        return GaussianNoise(mu=0, sigma=epsilon)
+        return GaussianNoise(mu=0, sigma=epsilon, random_seed=random_seed)
 
     def _validate_noise(self, noise_type: str, epsilon: float) -> None:
         # Parameter: noise_type.

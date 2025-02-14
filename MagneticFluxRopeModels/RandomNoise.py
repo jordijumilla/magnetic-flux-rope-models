@@ -15,8 +15,8 @@ class RandomNoise:
 
 
 class UniformNoise(RandomNoise):
-    def __init__(self, epsilon: float) -> None:
-        super().__init__()
+    def __init__(self, epsilon: float, random_seed: int = 0) -> None:
+        super().__init__(random_seed=random_seed)
         self.epsilon: float = epsilon
 
     def generate_noise(self, num_samples: int) -> np.ndarray:
@@ -27,8 +27,8 @@ class UniformNoise(RandomNoise):
 class GaussianNoise(RandomNoise):
     """Class that allows to generate Gaussian distributed samples of mean = mu and standard deviation = sigma."""
 
-    def __init__(self, mu: float = 0, sigma: float = 0.05) -> None:
-        super().__init__()
+    def __init__(self, mu: float = 0, sigma: float = 0.05, random_seed: int = 0) -> None:
+        super().__init__(random_seed=random_seed)
         self.mu: float = mu
         self.sigma: float = sigma
 
