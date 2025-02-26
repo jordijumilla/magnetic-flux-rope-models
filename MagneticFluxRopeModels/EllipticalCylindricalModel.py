@@ -385,7 +385,8 @@ class EllipticalCylindricalModel(MFRBaseModel):
         self, boundary: np.ndarray | None = None,
         vector_dict: dict[str, tuple[np.ndarray, np.ndarray]] | None = None,
         normalise_radial_coordinate: bool = False,
-        fig_size: tuple[float, float] | None = None
+        fig_size: tuple[float, float] | None = None,
+        axis = None
     ) -> None:
         if boundary is None:
             boundary = self.get_boundary()
@@ -395,7 +396,10 @@ class EllipticalCylindricalModel(MFRBaseModel):
 
         scale_factor: float = 1 / self.R if normalise_radial_coordinate else 1.0
 
-        fig, ax = plt.subplots(tight_layout=True, figsize=fig_size)
+        if axis is None:
+            fig, ax = plt.subplots(tight_layout=True, figsize=fig_size)
+        else:
+            ax = axis
         ax.plot(boundary[:, 0] * scale_factor, boundary[:, 1] * scale_factor)
 
         for vector_origin, vector_end in vector_dict.values():
@@ -423,15 +427,53 @@ class EllipticalCylindricalModel(MFRBaseModel):
             ax.set_ylabel("y [AU]")
         
         plt.title("Magnetic flux rope boundary")
-        plt.show()
+        if axis is None:
+            plt.show()
 
-    def _resolve_trajectory(self, v_sc: float, y_0: float, num_points: int) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, bool]:
+    def find_intersection_points_rot(self, y_0: float, theta: float) -> tuple[np.ndarray | None, np.ndarray | None]:
+        # The trajectory will pass through [0, y_0, 0].
+        # Compute the intersection of the elliptical cylinder with the line of equation (x, y, z) = (0, y_0, 0) + (cos(\theta), 0, \sin(theta))*\lambda
+        cos_psi = math.cos(self.psi)
+        cos_psi_2 = cos_psi * cos_psi
+        sin_psi = math.sin(self.psi)
+        sin_psi_2 = sin_psi * sin_psi
+        R_2 = self.R * self.R
+        delta_2 = self.delta * self.delta
+
+        A = (cos_psi_2 / (delta_2 * R_2)) + (sin_psi_2 / R_2)
+        B = -cos_psi * sin_psi * (1 - 1/delta_2) / R_2
+        C = (sin_psi_2 / (delta_2 * R_2)) + (cos_psi_2 / R_2)
+
+        # Quadratic equation.
+        cos_theta = math.cos(theta)
+        sin_theta = math.sin(theta)
+        y_0_R = y_0 * self.R
+        a = A * cos_theta * cos_theta
+        b = 2 * B * y_0_R * cos_theta
+        c = C * y_0_R * y_0_R - 1
+
+        # Solve the quadratic equation a*lambda^2 + b*lambda + c = 0
+        discriminant = b * b - 4 * a * c
+        if discriminant < 0:
+            # No intersection points.
+            return None, None
+        discriminant_sqrt = math.sqrt(discriminant)
+        lambda1 = (-b - discriminant_sqrt) / (2 * a)
+        lambda2 = (-b + discriminant_sqrt) / (2 * a)
+
+        # Calculate the intersection points
+        intersection1 = np.array([cos_theta * lambda1, y_0_R, sin_theta * lambda1])
+        intersection2 = np.array([cos_theta * lambda2, y_0_R, sin_theta * lambda2])
+
+        return intersection1, intersection2
+
+    def _resolve_trajectory(self, v_sc: float, y_0: float, theta: float, time_stencil: int | np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, bool]:
         """Resolve the entry and exit points of the S/C in the magnetic flux rope.
 
         Args:
             v_sc (float): Speed of the spacecraft in km/s.
             y_0 (float): Impact parameter
-            num_points (int): _description_
+            time_stencil (int | np.ndarray): An integer number of points to sample the trajectory uniformly, or an array of increasing times, not necessarily equispaced.
 
         Raises:
             ValueError: _description_
@@ -442,9 +484,19 @@ class EllipticalCylindricalModel(MFRBaseModel):
         # Start by finding the rope limits. We solve analitically for the intersection of the trajectory
         # with the elliptical cylinder.
 
-        # Equation of the rope boundary (r = R):
+        # The flux rope is left so it has its axis in the z direction.
+        # The trajectory of the spacecraft is r(lambda): (x, y, z) = (0, y_0, 0) + (cos(theta), 0, sin(theta))*lambda
+        # Where lambda is the parameter. Actually, lambda is just v_sc * (t - t*), where t* is the time at the centre
+        # (y = y_0) of the flux rope.
+
+        # Equation of the rope boundary (r = R) when the psi angle is 0, is:
         # x = delta * R * cos(phi)
         # y = R * sin(phi)
+
+        # Which has the equation (x / R)^2 + (y / (delta*R))^2 = R^2.
+
+        # If a rotation is applied, then.
+
 
         # If we apply the psi rotation matrix, we get:
         # x' = delta * R * cos(phi) * cos (psi) - R * sin(phi) * sin(psi)
@@ -458,36 +510,31 @@ class EllipticalCylindricalModel(MFRBaseModel):
         # We note that for the circular-cylindrical case (delta = 1), we get a solution that suits what we would expect:
         # psi = arctan(cotan(0)) +- arccos(y_0 / R) = (pi / 2) +- arccos(y_0 / R)
 
+        entry_point, exit_point = self.find_intersection_points_rot(y_0, theta)
+
         # Start by checking whether the S/C crosses the flux rope.
-        h: float = self.get_h(self.psi)
-        if abs(y_0 / h) > 1:
+        if entry_point is None or exit_point is None:
             return [], [], [], [], False
 
-        phi_middle: float = math.atan2(1, self.delta * math.tan(self.psi))
-        phi_increment: float = math.acos(y_0 / h)
-
-        phi_entry: float = phi_middle + phi_increment
-        phi_exit: float = phi_middle - phi_increment
-
-        entry_point: np.ndarray = self.convert_elliptical_to_cartesian_cordinates(r=self.R, phi=phi_entry, z=0)
-        exit_point: np.ndarray = self.convert_elliptical_to_cartesian_cordinates(r=self.R, phi=phi_exit, z=0)
-
-        x_entry: float = entry_point[0]
-        x_exit: float = exit_point[0]
-
-        # Calculate the time with the entry and exit coordinates.
-        x_distance: float = x_exit - x_entry
-        time_max: float = (x_distance * self.AU_to_m) / v_sc
-        time_range: np.ndarray = np.linspace(start=0, stop=time_max, num=num_points, endpoint=True)
+        if isinstance(time_stencil, int):
+            # We were supplied with the number of points to sample the trajectory.
+            distance_in_flux_rope = np.linalg.norm(np.array(exit_point) - np.array(entry_point))
+            time_in_flux_rope: float = (distance_in_flux_rope * self.AU_to_m) / v_sc
+            time_range: np.ndarray = np.linspace(start=0, stop=time_in_flux_rope, num=time_stencil, endpoint=True)
+        else:
+            # We were supplied with an array of increasing times.
+            time_range = time_stencil - time_stencil[0]
+            
+        num_points: int = len(time_range)
 
         # Build the trajectory inside of the MFR.
-        x_tajectory: np.ndarray = np.linspace(start=x_entry, stop=x_exit, num=num_points, endpoint=True)
+        x_tajectory: np.ndarray = entry_point[0] + (exit_point[0] - entry_point[0]) * (time_range / time_range[-1])
         y_trajectory: np.ndarray = y_0 * self.R * np.ones((num_points))
-        z_trajectory: np.ndarray = np.zeros((num_points))
+        z_trajectory: np.ndarray = entry_point[2] + (exit_point[2] - entry_point[2]) * (time_range / time_range[-1])
 
         return time_range, x_tajectory, y_trajectory, z_trajectory, True
 
-    def _validate_crossing_parameters(self, y_0: float, num_points: int) -> None:
+    def _validate_crossing_parameters(self, y_0: float, theta: float, time_stencil: int) -> None:
         # Parameter: y_0.
         if not isinstance(y_0, (int, float)):
             raise TypeError("Parameter: y_0 must be an integer or float.")
@@ -495,28 +542,37 @@ class EllipticalCylindricalModel(MFRBaseModel):
         if not (-1.0 < y_0 < 1.0):
             raise ValueError("Parameter: y_0 must be in (-1.0, 1.0).")
         
-        # Parameter: num_points.
-        if not isinstance(num_points, int):
-            raise TypeError("Parameter: num_points must be an integer.")
+        # Parameter: theta.
+        if not isinstance(theta, (int, float)):
+            raise TypeError("Parameter: theta must be an integer or float.")
         
-        if not (num_points >= 5):
-            raise ValueError("Parameter: num_points must be >= 5.")
+        if not (-math.pi/2 < theta < math.pi / 2):
+            raise TypeError("Parameter: theta must be in range (-pi/2, pi/2).")
+        
+        # Parameter: time_stencil.
+        if not isinstance(time_stencil, (int, list, tuple, pd.Series, np.ndarray)):
+            raise TypeError("Parameter: time_stencil must be an integer or array.")
+        
+        # Assert number grater that 5 or array increasing.
 
     def simulate_crossing(self,
                           v_sc: float,
                           y_0: float = 0.0,
-                          num_points: int = 51,
+                          theta: float = 0.0,
+                          time_stencil: int = 51,
                           noise_type: str | None = None,
                           epsilon: float = 0.05,
                           initial_time: float = 0.0,
-                          initial_datetime: datetime.datetime | None = None) -> pd.DataFrame | None:
+                          initial_datetime: datetime.datetime | None = None,
+                          random_seed: int = 0) -> pd.DataFrame | None:
         """Simulate the crossing of a spacecraft (S/C) through the magnetic flux rope. Simulate the measurements of the S/C through it.
         Currently, only straight trajectories at constant speed are supported.
 
         Args:
             v_sc (float): Spacecraft speed in km/s.
             y_0 (float, optional): Spacecraft distance from the central axis of the flux rope as a fraction of the flux rope radius. Valid range (-1.0, 1.0). Defaults to 0.0.
-            num_points (int, optional): Number of data points conforming the time series. Must be >= 5. Defaults to 51.
+            theta (float, optional): Angle between the velocity and the flux rope axis.
+            time_stencil (int, optional): Number of data points conforming the time series. Must be >= 5. Defaults to 51.
             noise_type (str | None, optional): _description_. Defaults to None.
             epsilon (float, optional): _description_. Defaults to 0.05.
 
@@ -527,16 +583,21 @@ class EllipticalCylindricalModel(MFRBaseModel):
         # TODO: Would it be interesting to set the measurement frequency instead of the total number of points?
 
         # Start by validating the crossing parameters.
-        self._validate_crossing_parameters(y_0, num_points)
+        self._validate_crossing_parameters(y_0, theta, time_stencil)
 
         # Convert the speed from km/s to m/s.
         v_sc_metres_per_second: float = v_sc * 1_000
 
+        # velocity_sc: np.ndarray = v_sc_metres_per_second * np.array([math.cos(theta), 0, math.sin(theta)])
+
         # Start by resolving the geometrical trajectory of the spacecraft.
-        time_range, x_tajectory, y_trajectory, z_trajectory, does_intersect = self._resolve_trajectory(v_sc_metres_per_second, y_0, num_points)
+        time_range, x_tajectory, y_trajectory, z_trajectory, does_intersect = self._resolve_trajectory(v_sc_metres_per_second, y_0, theta, time_stencil)
 
         if not does_intersect:
+            # The crossing set by the crossing parameters does not intersect the flux-rope.
             return None
+
+        num_points: int = len(time_range)
 
         # Initialise the magnetic and current density field arrays.
         B_field = np.zeros((num_points, 3))
@@ -570,7 +631,7 @@ class EllipticalCylindricalModel(MFRBaseModel):
 
         # Add noise to simulate measurement error, if the user wants it.
         if noise_type is not None:
-            noise_generator: RandomNoise = self.get_noise_generator(noise_type, epsilon)
+            noise_generator: RandomNoise = self.get_noise_generator(noise_type, epsilon, random_seed)
 
             B_field[:, 0] += noise_generator.generate_noise(num_points)
             B_field[:, 1] += noise_generator.generate_noise(num_points)
@@ -578,6 +639,15 @@ class EllipticalCylindricalModel(MFRBaseModel):
             J_field[:, 0] += noise_generator.generate_noise(num_points)
             J_field[:, 1] += noise_generator.generate_noise(num_points)
             J_field[:, 2] += noise_generator.generate_noise(num_points)
+
+        # We need to change the magnetic field and current density to the new coordinates (rotated by theta).
+        # We can do this by applying the rotation matrix.
+        cos_theta = math.cos(theta)
+        sin_theta = math.sin(theta)
+        rotation_matrix = np.array([[cos_theta, 0, sin_theta], [0, 1, 0], [-sin_theta, 0, cos_theta]])
+
+        B_field = B_field @ rotation_matrix
+        J_field = J_field @ rotation_matrix
 
         # Join all the simulated measurements on a pandas data frame.
         df = pd.DataFrame()

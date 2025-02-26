@@ -138,7 +138,7 @@ class MFRBaseModel():
         mfr_model = model_class(**model_parameters)
 
         # Use the same number of points for the fitting as the incoming observations.
-        crossing_parameters["num_points"] = len(df_observations)
+        crossing_parameters["time_stencil"] = df_observations["time"].to_numpy()
 
         # Simulate the crossing.
         df_test: pd.DataFrame | None = mfr_model.simulate_crossing(**crossing_parameters)
@@ -147,7 +147,7 @@ class MFRBaseModel():
             # There is no intersection.
             return 1e9, None
 
-        if residue_method in ["SE", "MSE", "RMSE"]:
+        if residue_method in ["X", "SE", "MSE", "RMSE"]:
             residue = np.sum(np.square(df_observations["B_x"] - df_test["B_x"]))
             residue += np.sum(np.square(df_observations["B_y"] - df_test["B_y"]))
             residue += np.sum(np.square(df_observations["B_z"] - df_test["B_z"]))
@@ -157,6 +157,13 @@ class MFRBaseModel():
         
         if residue_method == "RMSE":
             residue = math.sqrt(residue)
+        
+        if residue_method == "X":
+            B_tot_observations = np.square(df_observations["B_x"]) + np.square(df_observations["B_y"]) + np.square(df_observations["B_z"])
+            B_tot_test = np.square(df_test["B_x"]) + np.square(df_test["B_y"]) + np.square(df_test["B_z"])
+            residue += (np.sum(np.square(np.sqrt(B_tot_observations) - np.sqrt(B_tot_test))))
+            residue /= math.sqrt(np.max(B_tot_observations))
+            residue /= len(df_observations)
 
         return residue, mfr_model
     
@@ -214,7 +221,7 @@ class MFRBaseModel():
         model_parameters_opt = {p.name: x_opt[idx] for idx, p in enumerate(model_parameters_to_optimise)} | model_parameters_fixed
         n_offset: int = len(model_parameters_to_optimise)
         crossing_parameters_opt = {p.name: x_opt[n_offset + idx] for idx, p in enumerate(crossing_parameters_to_optimise)}| crossing_parameters_fixed
-        crossing_parameters_opt["num_points"] = len(df_observations)
+        crossing_parameters_opt["time_stencil"] = df_observations["time"].to_numpy()
 
         fitted_model = model_class(**model_parameters_opt)
 
