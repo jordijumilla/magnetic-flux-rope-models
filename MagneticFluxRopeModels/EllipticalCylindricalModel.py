@@ -426,7 +426,7 @@ class EllipticalCylindricalModel(MFRBaseModel):
             ax.set_xlabel("x [AU]")
             ax.set_ylabel("y [AU]")
         
-        plt.title("Magnetic flux rope boundary")
+        ax.set_title("Magnetic flux rope boundary")
         if axis is None:
             plt.show()
 
