@@ -571,7 +571,7 @@ class EllipticalCylindricalModel(MFRBaseModel):
         Args:
             v_sc (float): Spacecraft speed in km/s.
             y_0 (float, optional): Spacecraft distance from the central axis of the flux rope as a fraction of the flux rope radius. Valid range (-1.0, 1.0). Defaults to 0.0.
-            theta (float, optional): Angle between the velocity and the flux rope axis.
+            theta (float, optional): Angle between the velocity and the flux rope axis. Positive means upwards, negative downards.
             time_stencil (int, optional): Number of data points conforming the time series. Must be >= 5. Defaults to 51.
             noise_type (str | None, optional): _description_. Defaults to None.
             epsilon (float, optional): _description_. Defaults to 0.05.
@@ -642,8 +642,8 @@ class EllipticalCylindricalModel(MFRBaseModel):
 
         # We need to change the magnetic field and current density to the new coordinates (rotated by theta).
         # We can do this by applying the rotation matrix.
-        cos_theta = math.cos(theta)
-        sin_theta = math.sin(theta)
+        cos_theta = math.cos(-theta)
+        sin_theta = math.sin(-theta)
         rotation_matrix = np.array([[cos_theta, 0, sin_theta], [0, 1, 0], [-sin_theta, 0, cos_theta]])
 
         B_field = B_field @ rotation_matrix
