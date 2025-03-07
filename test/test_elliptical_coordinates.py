@@ -68,7 +68,5 @@ def test_elliptical_to_cartesian() -> None:
                 # Create an instance of the model with the given delta, psi and R.
                 model = ECModel(delta=delta, psi=psi, R=R)
 
-                p_elliptical = np.array([R, 0, 0])
-                p_cartesian = model.convert_elliptical_to_cartesian_cordinates(p_elliptical[0], p_elliptical[1], p_elliptical[2])
-
+                p_cartesian = model.convert_elliptical_to_cartesian_cordinates(R, 0, 0)
                 assert np.allclose(p_cartesian, np.array([R*delta*math.cos(psi), R*delta*math.sin(psi), 0]), atol=1e-8)
