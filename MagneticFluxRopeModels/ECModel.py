@@ -3,7 +3,7 @@
 import numpy as np
 import pandas as pd
 import math
-from MagneticFluxRopeModels.EllipticalCylindricalModel import EllipticalCylindricalModel
+from EllipticalCylindricalModel import EllipticalCylindricalModel
 
 # TODOs:
 # Add multiple n & m terms in the model.
@@ -84,6 +84,7 @@ class ECModel(EllipticalCylindricalModel):
 
         # Pre-compute alpha_n and beta_m parameters.
         self.R_to_n_plus_one: float = math.pow(self.R, self.n + 1)
+
         self.alpha_n: float = self.B_z_0 * (self.n + 1) / (self.mu_0 * self.delta * self.tau * self.R_to_n_plus_one)
         self.beta_m: float = self.B_z_0 * (self.n + 1) / (self.mu_0 * self.delta * self.C_nm * self.tau * math.pow(self.R, self.m + 1))
 
@@ -153,13 +154,14 @@ class ECModel(EllipticalCylindricalModel):
             - n = {self.n}
             - m = {self.m}
             - tau = {self.tau:.3f}
-            - C_nm = {self.C_nm:.3f}
+            - C_{self.n}{self.m} = {self.C_nm:.3f}
             - B_z_0 = {self.B_z_0:.3f} nT
             - handedness = {self.handedness}."""
 
     def get_magnetic_field_elliptical_coordinates(self, r: float, phi: float) -> np.ndarray:
         """Calculate the magnetic field in the elliptical vector basis."""
         B_r: float = 0
+
         B_phi: float = (
             self.handedness
             * self.mu_0
@@ -169,13 +171,22 @@ class ECModel(EllipticalCylindricalModel):
             * math.pow(r, self.m + 1)
             / (self.delta_squared + self.m + 1)
         )
+
         B_z: float = (
+            self.B_z_0 -
             self.mu_0
             * self.delta
             * self.alpha_n
-            * (self.tau * self.R_to_n_plus_one - math.pow(r, self.n + 1))
+            * math.pow(r, self.n + 1)
             / (self.n + 1)
         )
+        # B_z: float = (
+        #     self.mu_0
+        #     * self.delta
+        #     * self.alpha_n
+        #     * (self.tau * self.R_to_n_plus_one - math.pow(r, self.n + 1))
+        #     / (self.n + 1)
+        # )
 
         return np.array([B_r, B_phi, B_z])
 
@@ -193,6 +204,25 @@ class ECModel(EllipticalCylindricalModel):
 
         return np.array([J_r, J_phi, J_z]) / 1e9
 
+    def get_twist(self, r: float, phi: float) -> float:
+        #scale_factors = self.get_scale_factors(r, phi)
+
+        B_field = self.get_magnetic_field_elliptical_coordinates(r, phi)
+        B_phi = B_field[1]
+        B_z = B_field[2]
+
+        sin_phi: float = math.sin(phi)
+        cos_phi: float = math.cos(phi)
+
+        # Note that this factor is very similar to "h", but has the sine and cosine swapped.
+        factor = math.sqrt(self.delta_squared * cos_phi * cos_phi + sin_phi * sin_phi)
+
+        curl_z_B = 1/(r * factor)
+        curl_z_B *= B_phi
+        # curl_z_B *= r * # Partial B_phi w.r.t. the radial coordinate (r).
+
+        twist = curl_z_B / B_z
+        return twist
 
 def main() -> None:
     my_ec_model = ECModel(delta=0.7, psi=0.0)
