@@ -2,6 +2,7 @@ venv/
 venv-dev/
 *.pyc
 *.csv
+*.cdf
 .vscode/
 **/__pycache__/
 **/.obsidian/
