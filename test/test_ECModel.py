@@ -1,4 +1,4 @@
-from ECModel import ECModel
+from MagneticFluxRopeModels.ECModel import ECModel
 import numpy as np
 
 def test_B_z_0():
@@ -8,7 +8,7 @@ def test_B_z_0():
                 for tau in [0.5, 0.75, 1.0, 1.25, 1.5]:
                     ec_model = ECModel(delta=delta, psi=psi, B_z_0=B_z_0, tau=tau)
                     magnetic_field_centre = ec_model.get_magnetic_field_elliptical_coordinates(0, 0)
-                    assert abs(magnetic_field_centre[2] - ec_model.B_z_0) < 1e-6
+                    assert abs(magnetic_field_centre[2] - ec_model.B_z_0) < 1e-8
 
 
 def test_tau():
@@ -21,4 +21,4 @@ def test_tau():
                     magnetic_field_border = ec_model.get_magnetic_field_elliptical_coordinates(ec_model.R, 0)
                     
                     theoretical_tau = magnetic_field_centre[2] / (magnetic_field_centre[2] - magnetic_field_border[2])
-                    assert abs(theoretical_tau - ec_model.tau) < 1e-6
+                    assert abs(theoretical_tau - ec_model.tau) < 1e-8

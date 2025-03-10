@@ -1,4 +1,4 @@
-from ECModel import ECModel
+from MagneticFluxRopeModels.ECModel import ECModel
 import numpy as np
 import math
 
@@ -49,7 +49,11 @@ def test_quadrants() -> None:
                     phi = ellip[1]
                     z_ellip = ellip[2]
 
+                    # The radial coordinate should be equal to R.
                     assert np.isclose(R, r, atol=1e-8)
+
+                    # The azimuthal coordinate should be equal to the expected value.
+                    # For the third quadrant, the azimuthal coordinate can be either 180 degrees or -180 degrees.
                     if quadrant == 3:
                         assert np.isclose(expected_phi, phi, atol=1e-8) or np.isclose(-expected_phi, phi, atol=1e-8)
                     else:
@@ -70,3 +74,7 @@ def test_elliptical_to_cartesian() -> None:
 
                 p_cartesian = model.convert_elliptical_to_cartesian_cordinates(R, 0, 0)
                 assert np.allclose(p_cartesian, np.array([R*delta*math.cos(psi), R*delta*math.sin(psi), 0]), atol=1e-8)
+
+
+def test_elliptical_to_cartesian_vector() -> None:
+    pass
