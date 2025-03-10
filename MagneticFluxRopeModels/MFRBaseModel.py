@@ -4,6 +4,8 @@ import pandas as pd
 import pickle
 import math
 import time
+import matplotlib.pyplot as plt
+import matplotlib
 from matplotlib.figure import Figure
 from typing import Self
 from scipy.optimize import fmin_l_bfgs_b
@@ -41,12 +43,12 @@ class MFRBaseModel():
         raise NotImplementedError
 
     @abc.abstractmethod
-    def simulate_crossing(self, *agrs, **kwargs):
+    def simulate_crossing(self, *args, **kwargs) -> pd.DataFrame | None:
         """Simulate a crossing of a spacecraft through the magnetic flux rope."""
         raise NotImplementedError
     
     @abc.abstractmethod
-    def _validate_crossing_parameters(self, *agrs, **kwargs):
+    def _validate_crossing_parameters(self, *agrs, **kwargs) -> None:
         """Validate the crossing parameters of the spacecraft through the magnetic flux rope."""
         raise NotImplementedError
 
@@ -130,12 +132,16 @@ class MFRBaseModel():
     def evaluate_model_and_crossing(model_class: Self,
                                     df_observations: pd.DataFrame,
                                     residue_method: str,
-                                    model_parameters: dict[str, float | None] = {},
-                                    crossing_parameters: dict[str, float | None] = {},
-                                    matching_manitudes: list[str] = []) -> tuple[float | None, Self | None]:
-        # delta: float, psi: float, n: int, m: int, v_sc: float, y_0: float
+                                    model_parameters: dict[str, float]  | None = None,
+                                    crossing_parameters: dict[str, float] | None = None) -> tuple[float | None, Self | None]:
+        if model_parameters is None:
+            model_parameters = dict()
+        
+        if crossing_parameters is None:
+            crossing_parameters = dict()
+
         # Instantiate the EC Model with the given parameters.
-        mfr_model = model_class(**model_parameters)
+        mfr_model: Self = model_class(**model_parameters)
 
         # Use the same number of points for the fitting as the incoming observations.
         crossing_parameters["time_stencil"] = df_observations["time"].to_numpy()
@@ -159,10 +165,11 @@ class MFRBaseModel():
             residue = math.sqrt(residue)
         
         if residue_method == "X":
-            B_tot_observations = np.square(df_observations["B_x"]) + np.square(df_observations["B_y"]) + np.square(df_observations["B_z"])
-            B_tot_test = np.square(df_test["B_x"]) + np.square(df_test["B_y"]) + np.square(df_test["B_z"])
-            residue += (np.sum(np.square(np.sqrt(B_tot_observations) - np.sqrt(B_tot_test))))
-            residue /= math.sqrt(np.max(B_tot_observations))
+            B_tot_observations = np.sqrt(np.square(df_observations["B_x"]) + np.square(df_observations["B_y"]) + np.square(df_observations["B_z"]))
+            B_tot_test = np.sqrt(np.square(df_test["B_x"]) + np.square(df_test["B_y"]) + np.square(df_test["B_z"]))
+            residue += np.sum(np.square(B_tot_observations - B_tot_test))
+            residue /= np.max(B_tot_observations)**2
+            residue = math.sqrt(residue)
             residue /= len(df_observations)
 
         return residue, mfr_model
@@ -170,8 +177,8 @@ class MFRBaseModel():
     @staticmethod
     def fit(model_class: Self,
             df_observations: pd.DataFrame,
-            model_parameters: dict,
-            crossing_parameters: dict,
+            model_parameters: dict[str, float],
+            crossing_parameters: dict[str, float],
             residue_method: str = "MSE",
             timeit: bool = False):
         # If the user wants timing information, start a time counter.
@@ -218,21 +225,93 @@ class MFRBaseModel():
             print(f"Optimisation did not converge: {info["warnflag"]}.")
             return None, None, info
 
-        model_parameters_opt = {p.name: x_opt[idx] for idx, p in enumerate(model_parameters_to_optimise)} | model_parameters_fixed
-        n_offset: int = len(model_parameters_to_optimise)
-        crossing_parameters_opt = {p.name: x_opt[n_offset + idx] for idx, p in enumerate(crossing_parameters_to_optimise)}| crossing_parameters_fixed
-        crossing_parameters_opt["time_stencil"] = df_observations["time"].to_numpy()
+        model_parameters_opt = {p.name: x_opt[idx] for idx, p in enumerate(model_parameters_to_optimise)}
+        info["model_parameters_opt"] = model_parameters_opt
 
-        fitted_model = model_class(**model_parameters_opt)
+        model_parameters_all = model_parameters_opt | model_parameters_fixed
+        n_offset: int = len(model_parameters_to_optimise)
+
+        crossing_parameters_opt = {p.name: x_opt[n_offset + idx] for idx, p in enumerate(crossing_parameters_to_optimise)}
+        info["crossing_parameters_opt"] = crossing_parameters_opt
+
+        crossing_parameters_all = crossing_parameters_opt | crossing_parameters_fixed
+        crossing_parameters_all["time_stencil"] = df_observations["time"].to_numpy()
+
+        fitted_model = model_class(**model_parameters_all)
 
         # Output the fitted simulated dataset.
-        fitted_df: pd.DataFrame = fitted_model.simulate_crossing(**crossing_parameters_opt)
+        fitted_df: pd.DataFrame = fitted_model.simulate_crossing(**crossing_parameters_all)
 
         if timeit:
             t2 = time.perf_counter()
             info["fitting_time"] = t2 - t1
 
-        return fitted_model, crossing_parameters_opt, fitted_df, info
+        return fitted_model, model_parameters_all, crossing_parameters_all, fitted_df, info
+
+
+    def plot_vs_time(self,
+                     data: pd.DataFrame,
+                     magnitude_names: str | list[str],
+                     colour: str | list[str],
+                     time_units: str = "s",
+                     datetime_axis: bool = False,
+                     marker: str = "o",
+                     linestyle: str = "-",
+                     markersize: str = 4,
+                     fig_size: tuple[float, float] | None = None,
+                     ax: matplotlib.axis.Axis| None = None) -> None | matplotlib.axis.Axis:
+        if isinstance(magnitude_names, str):
+            magnitude_names = [magnitude_names]
+        
+        if isinstance(colour, str):
+            colour = [colour]
+
+        axis_provided: bool = ax is not None
+
+        # Extract the time from the dataframe.
+        if not datetime_axis:
+            time = data["time"].to_numpy(copy=True)
+            if time_units in {"min", "minute"}:
+                time /= 60
+            elif time_units in {"h", "hour"}:
+                time /= 60 * 60
+            elif time_units == "day":
+                time /= 24 * 60 * 60
+        else:
+            time = data["datetime"]
+
+        time_min = np.min(time)
+        time_max = np.max(time)
+
+        if not axis_provided:
+            _, ax = plt.subplots(1, 1, tight_layout=True, figsize=fig_size)
+
+        for idx, magnitude_name in enumerate(magnitude_names):
+            # Extract the magnitude to plot from the dataframe, and its units.
+            magnitude_to_plot = data[magnitude_name].to_numpy(copy=True)
+            magnitude_units = self._units[magnitude_name]
+            ax.plot(time, magnitude_to_plot, marker=marker, linestyle=linestyle, markersize=markersize, color=colour[idx])
+            if datetime_axis:
+                ax.set_xlabel("datetime")
+            else:
+                ax.set_xlabel(f"time [{time_units}]")
+            ax.set_ylabel(f"${magnitude_name}$ [{magnitude_units}]")
+            ax.grid(alpha=0.35)
+            ax.set_xlim(time_min, time_max)
+            # plt.gcf().axes[0].yaxis.get_major_formatter().set_scientific(False)
+
+        plt.legend([f"${mag}$" for mag in magnitude_names])
+
+        if not axis_provided:
+            plt.show()
+        else:
+            return ax
+
+    def plot_crossing_magnetic_difference(self, df_to_fit: pd.DataFrame, df_fitted: pd.DataFrame) -> None:
+        fig, ax = plt.subplots(figsize=(10, 6))
+        self.plot_vs_time(df_to_fit, ["B_x", "B_y", "B_z", "B"], colour=["r", "g", "b", "k"], time_units="h", ax=ax)
+        self.plot_vs_time(df_fitted, ["B_x", "B_y", "B_z", "B"], colour=["r", "g", "b", "k"], time_units="h", marker="^", linestyle="--", ax=ax)
+        plt.show()
 
     @staticmethod
     def _add_pickle_extension(file_path: str) -> str:
