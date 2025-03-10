@@ -1,9 +1,10 @@
 # export PYTHONPATH=$PYTHONPATH:/Users/macbookpro/Documents/grad-shafranov-reconstruction-technique/
 
 import numpy as np
+from numpy.typing import NDArray
 import pandas as pd
 import math
-from EllipticalCylindricalModel import EllipticalCylindricalModel
+from MagneticFluxRopeModels.EllipticalCylindricalModel import EllipticalCylindricalModel
 
 # TODOs:
 # Add multiple n & m terms in the model.
@@ -83,9 +84,7 @@ class ECModel(EllipticalCylindricalModel):
         self._validate_parameters()
 
         # Pre-compute alpha_n and beta_m parameters.
-        self.R_to_n_plus_one: float = math.pow(self.R, self.n + 1)
-
-        self.alpha_n: float = self.B_z_0 * (self.n + 1) / (self.mu_0 * self.delta * self.tau * self.R_to_n_plus_one)
+        self.alpha_n: float = self.B_z_0 * (self.n + 1) / (self.mu_0 * self.delta * self.tau * math.pow(self.R, self.n + 1))
         self.beta_m: float = self.B_z_0 * (self.n + 1) / (self.mu_0 * self.delta * self.C_nm * self.tau * math.pow(self.R, self.m + 1))
 
         # Create a dictionary with the units used for each magnitude.
@@ -116,14 +115,14 @@ class ECModel(EllipticalCylindricalModel):
             raise ValueError("Parameter: n must be >= 1.")
 
         # Parameter: m.
-        if type(self.m) is not int:
+        if not isinstance(self.m, int):
             raise TypeError("Parameter: m must be an integer.")
 
         if self.m < 0:
             raise ValueError("Parameter: m must be >= 0.")
 
         # Parameter: handedness.
-        if type(self.handedness) is not int:
+        if not isinstance(self.handedness, int):
             raise TypeError("Parameter: handedness must be an integer.")
 
         if self.handedness not in [-1, 1]:
@@ -158,7 +157,7 @@ class ECModel(EllipticalCylindricalModel):
             - B_z_0 = {self.B_z_0:.3f} nT
             - handedness = {self.handedness}."""
 
-    def get_magnetic_field_elliptical_coordinates(self, r: float, phi: float) -> np.ndarray:
+    def get_magnetic_field_elliptical_coordinates(self, r: float, phi: float) -> NDArray[np.float64]:
         """Calculate the magnetic field in the elliptical vector basis."""
         B_r: float = 0
 
@@ -180,18 +179,10 @@ class ECModel(EllipticalCylindricalModel):
             * math.pow(r, self.n + 1)
             / (self.n + 1)
         )
-        # B_z: float = (
-        #     self.mu_0
-        #     * self.delta
-        #     * self.alpha_n
-        #     * (self.tau * self.R_to_n_plus_one - math.pow(r, self.n + 1))
-        #     / (self.n + 1)
-        # )
 
         return np.array([B_r, B_phi, B_z])
 
-    def get_current_density_field_elliptical_coordinates(self, r: float, phi: float) -> np.ndarray:
-        # The radial current density component is zero.
+    def get_current_density_field_elliptical_coordinates(self, r: float, phi: float) -> NDArray[np.float64]:
         J_r: float = 0
 
         # Pre-compute h and chi factors.
@@ -205,8 +196,6 @@ class ECModel(EllipticalCylindricalModel):
         return np.array([J_r, J_phi, J_z]) / 1e9
 
     def get_twist(self, r: float, phi: float) -> float:
-        #scale_factors = self.get_scale_factors(r, phi)
-
         B_field = self.get_magnetic_field_elliptical_coordinates(r, phi)
         B_phi = B_field[1]
         B_z = B_field[2]
