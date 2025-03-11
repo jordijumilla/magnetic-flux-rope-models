@@ -294,11 +294,13 @@ class MFRBaseModel():
             if datetime_axis:
                 ax.set_xlabel("datetime")
             else:
-                ax.set_xlabel(f"time [{time_units}]")
-            ax.set_ylabel(f"${magnitude_name}$ [{magnitude_units}]")
-            ax.grid(alpha=0.35)
+                ax.set_xlabel(f"time ({time_units})")
+            ax.set_ylabel(f"${magnitude_name}$ ({magnitude_units})")
+            ax.grid(which="major", alpha=0.5)
+            ax.grid(which="minor", alpha=0.25, linestyle=':')
+            ax.minorticks_on()
             ax.set_xlim(time_min, time_max)
-            # plt.gcf().axes[0].yaxis.get_major_formatter().set_scientific(False)
+            
 
         plt.legend([f"${mag}$" for mag in magnitude_names])
 
@@ -308,9 +310,10 @@ class MFRBaseModel():
             return ax
 
     def plot_crossing_magnetic_difference(self, df_to_fit: pd.DataFrame, df_fitted: pd.DataFrame) -> None:
-        fig, ax = plt.subplots(figsize=(10, 6))
+        _, ax = plt.subplots(figsize=(10, 6))
         self.plot_vs_time(df_to_fit, ["B_x", "B_y", "B_z", "B"], colour=["r", "g", "b", "k"], time_units="h", ax=ax)
         self.plot_vs_time(df_fitted, ["B_x", "B_y", "B_z", "B"], colour=["r", "g", "b", "k"], time_units="h", marker="^", linestyle="--", ax=ax)
+        ax.set_title("Magnetic field components comparison vs time")
         plt.show()
 
     @staticmethod
