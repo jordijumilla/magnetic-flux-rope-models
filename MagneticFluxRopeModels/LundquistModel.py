@@ -129,7 +129,8 @@ class LundquistModel(EllipticalCylindricalModel):
 
         # TODO: Review this calculation.
         J_phi: float = self.B_z_0 * bessel_1 * alpha_over_R
-        J_z: float = (self.handedness * self.B_z_0 / r) * (bessel_1 + 0.5 * r * alpha_over_R * (bessel_0 - bessel_2))
+        eps = 1e-12
+        J_z: float = (self.handedness * self.B_z_0 / (r + eps)) * (bessel_1 + 0.5 * r * alpha_over_R * (bessel_0 - bessel_2))
 
         return np.array([J_r, J_phi, J_z])
 
