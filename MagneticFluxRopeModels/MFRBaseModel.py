@@ -77,6 +77,19 @@ class MFRBaseModel():
         if not (epsilon > 0):
             raise ValueError("Parameter: epsilon must be > 0.")
         
+    
+    @staticmethod
+    def convert_units_magnetic_flux(magnitude, input_units: str, output_units: str):
+        if input_units == output_units:
+            # Do not need to change the units.
+            return magnitude
+        elif input_units == "Wb" and output_units == "Mx":
+            return magnitude * 1e8
+        elif input_units == "Mx" and output_units == "Wb":
+            return magnitude / 1e8
+        else:
+            raise ValueError(f"Conversion from {input_units} to {output_units} is not supported.")
+
     @staticmethod
     def cartesian_vector_magnitude(v_x: np.ndarray, v_y: np.ndarray, v_z: np.ndarray) -> np.ndarray:
         return np.sqrt(np.square(v_x) + np.square(v_y) + np.square(v_z))
