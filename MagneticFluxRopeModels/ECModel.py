@@ -1,8 +1,5 @@
-# export PYTHONPATH=$PYTHONPATH:/Users/macbookpro/Documents/grad-shafranov-reconstruction-technique/
-
 import numpy as np
 from numpy.typing import NDArray
-import pandas as pd
 import math
 from MagneticFluxRopeModels.EllipticalCylindricalModel import EllipticalCylindricalModel
 
@@ -84,8 +81,9 @@ class ECModel(EllipticalCylindricalModel):
         self._validate_parameters()
 
         # Pre-compute alpha_n and beta_m parameters.
-        self.alpha_n: float = self.B_z_0 * (self.n + 1) / (self.mu_0 * self.delta * self.tau * math.pow(self.R, self.n + 1))
-        self.beta_m: float = self.B_z_0 * (self.n + 1) / (self.mu_0 * self.delta * self.C_nm * self.tau * math.pow(self.R, self.m + 1))
+        self.alpha_n: float = self.B_z_0 * (self.n + 1) / (self.mu_0 * self.delta * self.tau * math.pow(self.R * self.AU_to_m, self.n + 1))
+        #self.beta_m: float = self.alpha_n * math.pow(self.R * self.AU_to_m, self.n - self.m) / C_nm
+        self.beta_m: float = self.B_z_0 * (self.n + 1) / (self.mu_0 * self.delta * self.C_nm * self.tau * math.pow(self.R * self.AU_to_m, self.m + 1))
 
         # Create a dictionary with the units used for each magnitude.
         self._units = {
@@ -167,7 +165,7 @@ class ECModel(EllipticalCylindricalModel):
             * self.get_h(phi + self.psi)
             * self.delta
             * self.beta_m
-            * math.pow(r, self.m + 1)
+            * math.pow(r  * self.AU_to_m, self.m + 1)
             / (self.delta_squared + self.m + 1)
         )
 
@@ -176,7 +174,7 @@ class ECModel(EllipticalCylindricalModel):
             self.mu_0
             * self.delta
             * self.alpha_n
-            * math.pow(r, self.n + 1)
+            * math.pow(r * self.AU_to_m, self.n + 1)
             / (self.n + 1)
         )
 
@@ -190,15 +188,22 @@ class ECModel(EllipticalCylindricalModel):
         chi: float = self.get_chi(phi=phi + self.psi)
 
         # Compute the poloidal and axial components of the current density, as per equation 30 from the paper.
-        J_phi: float = h * self.alpha_n * math.pow(r, self.n)
-        J_z: float = h * h * self.beta_m * (chi + self.m) * math.pow(r, self.m) / (self.delta_squared + self.m + 1)
+        J_phi: float = h * self.alpha_n * math.pow(r * self.AU_to_m, self.n)
+        J_z: float = h * h * self.beta_m * (chi + self.m) * math.pow(r * self.AU_to_m, self.m) / (self.delta_squared + self.m + 1)
 
         return np.array([J_r, J_phi, J_z]) / 1e9
 
-    def get_twist(self, r: float, phi: float) -> float:
-        B_field = self.get_magnetic_field_elliptical_coordinates(r, phi)
+    def get_twist(self, r: float, phi: float, L: float | None = None) -> float:
+        B_field = self.get_magnetic_field_elliptical_coordinates(r=r, phi=phi)
         B_phi = B_field[1]
         B_z = B_field[2]
+
+        if L is None:
+            L = 2 * math.pi * self.R
+
+        return L*B_phi / (2*math.pi*r*B_z)
+    
+        # TODO: Check if this is correct.
 
         sin_phi: float = math.sin(phi)
         cos_phi: float = math.cos(phi)
@@ -212,83 +217,21 @@ class ECModel(EllipticalCylindricalModel):
 
         twist = curl_z_B / B_z
         return twist
-
-def main() -> None:
-    my_ec_model = ECModel(delta=0.7, psi=0.0)
-    df = my_ec_model.simulate_crossing(v_sc=450, y_0=0)
-    print(df)
-    return
-    # my_ec_model.radial_coordinate_sweep(two_fold=True, plot=True)
-
-    # my_ec_model.simulate_crossing(v_sc=450, y_0=0.999)
-
-    # Make a 2D sweep (radial & angular).
-    # my_ec_model.radial_and_angular_sweep(plot=True)
-
-    # my_ec_model.plot_boundary(normalise_radial_coordinate=True)
-    #print(my_ec_model)
-
-    # Make a radial sweep.
-    # my_ec_model.radial_coordinate_sweep(plot=True, normalise_radial_coordinate=True)
-    for noise_level in [0.001, 0.005, 0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.10]:
-        print(f"Noise level = {noise_level:.3f}.")
-        n_delta = 9
-        n_y_0 = 9
-        results = np.zeros((n_delta*n_y_0, 4))
-        idx = 0
-        for delta in np.linspace(0.45, 1.0, n_delta, endpoint=True):
-            for y_0 in np.linspace(0.0, 0.9, n_y_0, endpoint=True):
-                my_ec_model = ECModel(delta=delta, psi=0.0) # , psi=0.0, R=0.05
-                df = my_ec_model.simulate_crossing(v_sc=450.0, y_0=y_0, noise_type="gaussian", epsilon=noise_level*my_ec_model.B_z_0)
-                result = ECModel.fit(ECModel, df)
-                if result is not None:
-                    fitted_model, y_0_opt, optimisation_result = result
-                    fitted_deta = fitted_model.delta
-                    print(f"Delta = {delta:.3f}, y_0 = {y_0:.3f} ---> Opt. delta = {fitted_deta:.3f}, Opt. y_0 = {y_0_opt:.3f}")
-                    results[idx, :] = np.array([delta, y_0, fitted_deta, y_0_opt])
-                else:
-                    results[idx, :] = np.array([delta, y_0, 1e9, 1e9])
-                idx += 1
-                
-        
-        df_res = pd.DataFrame(results, columns=["delta", "y_0", "delta_opt", "y_0_opt"])
-        df_res.to_csv(f"sim_results_{noise_level:.3f}.csv", index=False)
-        # print(df_res)
     
-    return
-    print(df)
-    # my_ec_model.plot_boundary(normalise_radial_coordinate=True)
-    # return
-    # print(my_ec_model)
+    def get_total_axial_magnetic_flux(self, units: str = "Wb") -> float:
+        """Calculate the axial magnetic flux of the flux rope."""
+        phi_z = self.mu_0 * math.pi * self.delta_squared * self.alpha_n * math.pow(self.R * self.AU_to_m, self.n + 3) * (self.tau - 2/(self.n + 3)) / (self.n + 1)
+        
+        # Convert units to SI.
+        phi_z /= 1e9
+        
+        return self.convert_units_magnetic_flux(phi_z, input_units="Wb", output_units=units)
 
-    # # Make a radial sweep.
-    # my_ec_model.radial_coordinate_sweep(bPlot=True, normalise_radial_coordinate=True)
+    def get_total_poloidal_magnetic_flux(self, units: str = "Wb") -> float:
+        """Calculate the poloidal magnetic flux of the flux rope."""
+        phi_poloidal = self.mu_0 * self.delta_squared * self.beta_m * math.pow(self.R * self.AU_to_m, self.m + 2)  / ((self.delta_squared * self.m + 1)*(self.m + 2))
+        
+        # Convert units to SI.
+        phi_poloidal /= 1e9
 
-    # # Make a 2D sweep (radial & angular).
-    # my_ec_model.radial_and_angular_sweep(bPlot=True)
-
-    # point = my_ec_model.convert_elliptical_to_cartesian_cordinates(r=my_ec_model.R, phi=phi, z=0)
-    # basis = my_ec_model.get_elliptical_unit_basis(r=my_ec_model.R, phi=phi)
-
-    # my_ec_model.plot_boundary(
-    #     vector_dict={"$\hat{e}_r$": (point, basis[:, 0]), "$\hat{e}_{\phi}$": (point, basis[:, 1])}
-    # )
-
-    my_ec_model.plot_vs_time(df, ["B_x", "B_y", "B_z", "B"], colour=["r", "g", "b", "k"], time_units="h")
-    my_ec_model.plot_vs_time(df, ["J_x", "J_y", "J_z", "J"], colour=["r", "g", "b", "k"], time_units="h")
-    return
-
-    # print(basis)
-
-    # print(f"{basis[:, 0]=}")
-    # scale_factors = my_ec_model.compute_scale_factors(r=my_ec_model.R, phi=phi)
-    # print(f"{scale_factors=}")
-
-
-    # my_data = my_ec_model.generate_data()
-    # print(my_data)
-    # my_ec_model.plot_vs_time(["B", "J"], time_units="day")
-
-
-if __name__ == "__main__":
-    main()
+        return self.convert_units_magnetic_flux(phi_poloidal, input_units="Wb", output_units=units)
