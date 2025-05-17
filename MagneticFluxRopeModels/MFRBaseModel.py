@@ -76,7 +76,6 @@ class MFRBaseModel():
         # Parameter: epsilon.
         if not (epsilon > 0):
             raise ValueError("Parameter: epsilon must be > 0.")
-        
     
     @staticmethod
     def convert_units_magnetic_flux(magnitude, input_units: str, output_units: str):
@@ -159,6 +158,9 @@ class MFRBaseModel():
         # Use the same number of points for the fitting as the incoming observations.
         crossing_parameters["time_stencil"] = df_observations["time"].to_numpy()
 
+        # Set this flag to avoid unnecessary computations like current density and force density.
+        crossing_parameters["is_fitting"] = True
+
         # Simulate the crossing.
         df_test: pd.DataFrame | None = mfr_model.simulate_crossing(**crossing_parameters)
 
@@ -166,18 +168,13 @@ class MFRBaseModel():
             # There is no intersection.
             return 1e9, None
 
-        if residue_method in ["X", "SE", "MSE", "RMSE"]:
-            residue = np.sum(np.square(df_observations["B_x"] - df_test["B_x"]))
-            residue += np.sum(np.square(df_observations["B_y"] - df_test["B_y"]))
-            residue += np.sum(np.square(df_observations["B_z"] - df_test["B_z"]))
-
         if residue_method in ["MSE", "RMSE"]:
-            residue /= len(df_observations)
+            residue = ((df_observations[["B_x", "B_y", "B_z"]] - df_test[["B_x", "B_y", "B_z"]])**2).to_numpy().sum()
         
-        if residue_method == "RMSE":
-            residue = math.sqrt(residue)
-        
-        if residue_method == "X":
+            if residue_method == "RMSE":
+                residue = math.sqrt(residue / len(df_observations))
+
+        elif residue_method == "X":
             B_tot_observations = np.sqrt(np.square(df_observations["B_x"]) + np.square(df_observations["B_y"]) + np.square(df_observations["B_z"]))
             B_tot_test = np.sqrt(np.square(df_test["B_x"]) + np.square(df_test["B_y"]) + np.square(df_test["B_z"]))
             residue += np.sum(np.square(B_tot_observations - B_tot_test))
@@ -192,7 +189,7 @@ class MFRBaseModel():
             df_observations: pd.DataFrame,
             model_parameters: dict[str, float],
             crossing_parameters: dict[str, float],
-            residue_method: str = "MSE",
+            residue_method: str = "RMSE",
             timeit: bool = False):
         # If the user wants timing information, start a time counter.
         if timeit:
@@ -227,16 +224,18 @@ class MFRBaseModel():
         initial_parameters: list[float] = [p.initial_value for p in model_parameters_to_optimise] + [p.initial_value for p in crossing_parameters_to_optimise]
 
         # Call the optimiser.
-        x_opt, f_opt, info = fmin_l_bfgs_b(func=function_to_optimise, x0=initial_parameters, pgtol=1e-9, bounds=bounds, approx_grad=True)
+        x_opt, f_opt, info = fmin_l_bfgs_b(func=function_to_optimise, x0=initial_parameters, factr=1e4, pgtol=1e-9, bounds=bounds, approx_grad=True)
         
         # Populate the info with the optimisation results, for debug purposes.
         info["x_opt"] = x_opt
         info["f_opt"] = f_opt
+        info["function_calls"] = info["funcalls"]
+        info["number_of_iterations"] = info["nit"]
 
         # Check if there is convergence.
         if info["warnflag"] != 0:
             print(f"Optimisation did not converge: {info["warnflag"]}.")
-            return None, None, info
+            return None, None, None, None, info
 
         model_parameters_opt = {p.name: x_opt[idx] for idx, p in enumerate(model_parameters_to_optimise)}
         info["model_parameters_opt"] = model_parameters_opt
