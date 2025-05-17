@@ -261,6 +261,29 @@ class MFRBaseModel():
 
         return fitted_model, model_parameters_all, crossing_parameters_all, fitted_df, info
 
+    def compute_fitting_metrics(self, df_observations: pd.DataFrame, df_fitted: pd.DataFrame) -> dict[str, float]:
+        metrics = dict()
+        metrics["RMSE_x"] = math.sqrt(np.sum(np.square(df_observations["B_x"] - df_fitted["B_x"])) / len(df_observations))
+        metrics["RMSE_y"] = math.sqrt(np.sum(np.square(df_observations["B_y"] - df_fitted["B_y"])) / len(df_observations))
+        metrics["RMSE_z"] = math.sqrt(np.sum(np.square(df_observations["B_z"] - df_fitted["B_z"])) / len(df_observations))
+        metrics["RMSE"] =  math.sqrt(metrics["RMSE_x"]**2 + metrics["RMSE_y"]**2 + metrics["RMSE_z"]**2)
+
+        SS_res_x = np.sum(np.square(df_observations["B_x"] - df_fitted["B_x"]))
+        SS_tot_x = np.sum(np.square(df_observations["B_x"] - np.mean(df_observations["B_x"])))
+        metrics["R^2_x"] = float(1 - SS_res_x / SS_tot_x)
+
+        SS_res_y = np.sum(np.square(df_observations["B_y"] - df_fitted["B_y"]))
+        SS_tot_y = np.sum(np.square(df_observations["B_y"] - np.mean(df_observations["B_y"])))
+        metrics["R^2_y"] = float(1 - SS_res_y / SS_tot_y)
+
+        SS_res_z = np.sum(np.square(df_observations["B_z"] - df_fitted["B_z"]))
+        SS_tot_z = np.sum(np.square(df_observations["B_z"] - np.mean(df_observations["B_z"])))
+        metrics["R^2_z"] = float(1 - SS_res_z / SS_tot_z)
+
+        SS_res_tot = SS_res_x + SS_res_y + SS_res_z
+        SS_tot = SS_tot_x + SS_tot_y + SS_tot_z
+        metrics["R^2"] = float(1 - SS_res_tot / SS_tot)
+        return metrics
 
     def plot_vs_time(self,
                      data: pd.DataFrame,
