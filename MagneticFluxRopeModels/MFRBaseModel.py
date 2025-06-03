@@ -18,19 +18,9 @@ class MFRBaseModel():
     """MFRBaseModel is a Python interface that defines the methods that all magnetic
     flux rope (MFR) models classes should have."""
     def __init__(self) -> None:
-        # Physical constants and unit conversions.
+        # Physical constants.
         self.mu_0 = 4 * math.pi * (10 ** (-7))        
         self.AU_to_m = 149_597_870_700.0
-
-    # @classmethod
-    # def __subclasshook__(cls, subclass):
-    #     return (
-    #         hasattr(subclass, "__init__")
-    #         and callable(subclass.__init__)
-    #         and hasattr(subclass, "_validate_parameters")
-    #         and callable(subclass._validate_parameters)
-    #         or NotImplemented
-    #     )
     
     @abc.abstractmethod
     def __repr__(self) -> str:
@@ -69,9 +59,7 @@ class MFRBaseModel():
         if not isinstance(noise_type, str):
             raise ValueError("Parameter: noise_type must be string or None.")
         if noise_type != "uniform" and noise_type != "gaussian":
-            raise ValueError(
-                "Parameter: noise_type must be of one of the supported string options: 'uniform' or 'gaussian'."
-            )
+            raise ValueError("Parameter: noise_type must be of one of the supported string options: 'uniform' or 'gaussian'.")
 
         # Parameter: epsilon.
         if not (epsilon > 0):
@@ -175,6 +163,7 @@ class MFRBaseModel():
                 residue = math.sqrt(residue / len(df_observations))
 
         elif residue_method == "X":
+            # Method used by Nieves-Chinchilla et al. (2017) in "Elliptic-cylindrical Analytical Flux Rope Model for Magnetic Clouds"
             B_tot_observations = np.sqrt(np.square(df_observations["B_x"]) + np.square(df_observations["B_y"]) + np.square(df_observations["B_z"]))
             B_tot_test = np.sqrt(np.square(df_test["B_x"]) + np.square(df_test["B_y"]) + np.square(df_test["B_z"]))
             residue += np.sum(np.square(B_tot_observations - B_tot_test))
@@ -223,7 +212,7 @@ class MFRBaseModel():
         bounds = [(p.bounds[0], p.bounds[1]) for p in model_parameters_to_optimise] + [(p.bounds[0], p.bounds[1]) for p in crossing_parameters_to_optimise]
         initial_parameters: list[float] = [p.initial_value for p in model_parameters_to_optimise] + [p.initial_value for p in crossing_parameters_to_optimise]
 
-        # Call the optimiser.
+        # Call the L-BFGS-B optimiser.
         x_opt, f_opt, info = fmin_l_bfgs_b(func=function_to_optimise, x0=initial_parameters, factr=1e4, pgtol=1e-9, bounds=bounds, approx_grad=True)
         
         # Populate the info with the optimisation results, for debug purposes.
@@ -234,6 +223,7 @@ class MFRBaseModel():
 
         # Check if there is convergence.
         if info["warnflag"] != 0:
+            # TODO: Restart the optimisation with a different initial guess.
             print(f"Optimisation did not converge: {info["warnflag"]}.")
             return None, None, None, None, info
 
@@ -261,12 +251,25 @@ class MFRBaseModel():
         return fitted_model, model_parameters_all, crossing_parameters_all, fitted_df, info
 
     def compute_fitting_metrics(self, df_observations: pd.DataFrame, df_fitted: pd.DataFrame) -> dict[str, float]:
+        """Compute fitting metrics RMSE and R^2 between observed and fitted data.
+
+        Args:
+            df_observations (pd.DataFrame): The observed data.
+            df_fitted (pd.DataFrame): The fitted data.
+
+        Returns:
+            dict[str, float]: A dictionary containing the computed metrics.
+        """
+        # Initialise the metrics dictionary.
         metrics = dict()
+
+        # Compute RMSE for each component and total.
         metrics["RMSE_x"] = math.sqrt(np.sum(np.square(df_observations["B_x"] - df_fitted["B_x"])) / len(df_observations))
         metrics["RMSE_y"] = math.sqrt(np.sum(np.square(df_observations["B_y"] - df_fitted["B_y"])) / len(df_observations))
         metrics["RMSE_z"] = math.sqrt(np.sum(np.square(df_observations["B_z"] - df_fitted["B_z"])) / len(df_observations))
         metrics["RMSE"] =  math.sqrt(metrics["RMSE_x"]**2 + metrics["RMSE_y"]**2 + metrics["RMSE_z"]**2)
 
+        # Compute R^2 for each component and total.
         SS_res_x = np.sum(np.square(df_observations["B_x"] - df_fitted["B_x"]))
         SS_tot_x = np.sum(np.square(df_observations["B_x"] - np.mean(df_observations["B_x"])))
         metrics["R^2_x"] = float(1 - SS_res_x / SS_tot_x)
@@ -315,8 +318,8 @@ class MFRBaseModel():
         else:
             time = data["datetime"]
 
-        time_min = np.min(time)
-        time_max = np.max(time)
+        time_min: float = np.min(time)
+        time_max: float = np.max(time)
 
         if not axis_provided:
             _, ax = plt.subplots(1, 1, tight_layout=True, figsize=fig_size)
@@ -336,15 +339,22 @@ class MFRBaseModel():
             ax.minorticks_on()
             ax.set_xlim(time_min, time_max)
             
-
         plt.legend([f"${mag}$" for mag in magnitude_names])
 
         if not axis_provided:
+            # If no axis was provided, show the plot.
             plt.show()
         else:
+            # If an axis was provided, return it and do not show the plot.
             return ax
 
     def plot_crossing_magnetic_difference(self, df_to_fit: pd.DataFrame, df_fitted: pd.DataFrame) -> None:
+        """Plot the difference between the observed and fitted magnetic field components.
+
+        Args:
+            df_to_fit (pd.DataFrame): The observed data.
+            df_fitted (pd.DataFrame): The fitted data.
+        """
         _, ax = plt.subplots(figsize=(10, 6))
         self.plot_vs_time(df_to_fit, ["B_x", "B_y", "B_z", "B"], colour=["r", "g", "b", "k"], time_units="h", ax=ax)
         self.plot_vs_time(df_fitted, ["B_x", "B_y", "B_z", "B"], colour=["r", "g", "b", "k"], time_units="h", marker="^", linestyle="--", ax=ax)
@@ -380,5 +390,3 @@ class MFRBaseModel():
         with open(file_path_pickle, "rb") as f:
             model = pickle.load(f)
         return model
-
-
