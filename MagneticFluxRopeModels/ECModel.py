@@ -160,7 +160,7 @@ class ECModel(EllipticalCylindricalModel):
         B_r: float = 0
 
         B_phi: float = (
-            self.handedness
+            -self.handedness
             * self.mu_0
             * self.get_h(phi + self.psi)
             * self.delta
@@ -194,7 +194,10 @@ class ECModel(EllipticalCylindricalModel):
         return np.array([J_r, J_phi, J_z]) / 1e9
 
     def get_twist(self, r: float, phi: float, L: float | None = None) -> float:
-        B_field = self.get_magnetic_field_elliptical_coordinates(r=r, phi=phi)
+        B_field_elliptical = self.get_magnetic_field_elliptical_coordinates(r=r, phi=phi)
+
+        # Convert the magnetic field from elliptical to cartesian coordinates
+        B_field = self.convert_elliptical_to_cartesian_vector(B_field_elliptical[0], B_field_elliptical[1], B_field_elliptical[2], r, phi)
         B_phi = B_field[1]
         B_z = B_field[2]
 
@@ -228,7 +231,7 @@ class ECModel(EllipticalCylindricalModel):
         return self.convert_units_magnetic_flux(phi_z, input_units="Wb", output_units=units)
 
     def get_total_poloidal_magnetic_flux(self, units: str = "Wb") -> float:
-        """Calculate the poloidal magnetic flux of the flux rope."""
+        """Calculate the poloidal magnetic flux of the flux rope per unit length."""
         phi_poloidal = self.mu_0 * self.delta_squared * self.beta_m * math.pow(self.R * self.AU_to_m, self.m + 2)  / ((self.delta_squared * self.m + 1)*(self.m + 2))
         
         # Convert units to SI.
