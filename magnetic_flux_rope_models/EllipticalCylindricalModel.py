@@ -6,8 +6,8 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib import cm
-from MagneticFluxRopeModels.MFRBaseModel import MFRBaseModel
-from MagneticFluxRopeModels.RandomNoise import RandomNoise
+from magnetic_flux_rope_models.MFRBaseModel import MFRBaseModel
+from magnetic_flux_rope_models.RandomNoise import RandomNoise
 import datetime
 
 

@@ -1,7 +1,7 @@
 import numpy as np
 from numpy.typing import NDArray
 import math
-from MagneticFluxRopeModels.EllipticalCylindricalModel import EllipticalCylindricalModel
+from magnetic_flux_rope_models.EllipticalCylindricalModel import EllipticalCylindricalModel
 
 # TODOs:
 # Add multiple n & m terms in the model.

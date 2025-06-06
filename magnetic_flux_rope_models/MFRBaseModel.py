@@ -10,8 +10,8 @@ from matplotlib.figure import Figure
 from typing import Self
 from scipy.optimize import fmin_l_bfgs_b
 
-from MagneticFluxRopeModels.RandomNoise import RandomNoise, UniformNoise, GaussianNoise
-from MagneticFluxRopeModels.OptimisationEngine import OptimisationParameter
+from magnetic_flux_rope_models.RandomNoise import RandomNoise, UniformNoise, GaussianNoise
+from magnetic_flux_rope_models.OptimisationEngine import OptimisationParameter
 
 
 class MFRBaseModel():

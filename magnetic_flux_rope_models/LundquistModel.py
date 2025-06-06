@@ -1,6 +1,6 @@
 import numpy as np
 from scipy.special import jv
-from MagneticFluxRopeModels.EllipticalCylindricalModel import EllipticalCylindricalModel
+from magnetic_flux_rope_models.EllipticalCylindricalModel import EllipticalCylindricalModel
 
 
 class LundquistModel(EllipticalCylindricalModel):
