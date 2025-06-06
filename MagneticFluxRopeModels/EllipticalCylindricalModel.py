@@ -60,7 +60,12 @@ class EllipticalCylindricalModel(MFRBaseModel):
         self.psi_rotation_matrix: np.ndarray = np.array([[self.cos_psi, -self.sin_psi, 0],
                                                          [self.sin_psi, self.cos_psi,  0],
                                                          [0,            0,             1]])
+        self.psi_rotation_matrix_inverse: np.ndarray = np.array([[self.cos_psi, self.sin_psi, 0],
+                                                                [-self.sin_psi, self.cos_psi,  0],
+                                                                [0,            0,             1]])
 
+    def get_area(self) -> float:
+        return math.pi * self.R * self.R * self.delta
 
     def get_elliptical_unit_basis(self, r: float | np.ndarray, phi: float | np.ndarray) -> np.ndarray:
         """Calculate e_r and e_phi, given by the coordinate change:
@@ -137,9 +142,14 @@ class EllipticalCylindricalModel(MFRBaseModel):
         Returns:
             np.ndarray: array containing the corresponding elliptical coordinates [r, phi, z].
         """
+        # Rotate the Cartesian coordinates by -psi.
+        xyz_rot = self.psi_rotation_matrix_inverse @ np.array([x, y, z])
+        x_rot = xyz_rot[0]
+        y_rot = xyz_rot[1]
+        z = xyz_rot[2]
 
-        # Start by computing the angle phi
-        phi = np.atan2(y, self.delta * x) - self.psi
+        # Start by computing the angle phi.
+        phi = np.atan2(y_rot, x_rot / self.delta)
 
         # Pre-compute its cosine and sine for performance and readibility purposes.
         cos_phi = np.cos(phi)
@@ -159,7 +169,7 @@ class EllipticalCylindricalModel(MFRBaseModel):
 
     def compute_scale_factors(self, r: float, phi: float) -> np.ndarray:
         """Compute the scale factors h_r, h_phi, h_z."""
-        elliptical_basis: np.ndarray = self.get_elliptical_unit_basis(r=r, phi=phi + self.psi)
+        elliptical_basis: np.ndarray = self.get_elliptical_unit_basis(r=r, phi=phi)
         return np.sqrt(np.sum(np.square(elliptical_basis), axis=0))
     
     def get_h(self, phi: float) -> float:
@@ -202,7 +212,8 @@ class EllipticalCylindricalModel(MFRBaseModel):
             B_field[idx, :] = self.get_magnetic_field_elliptical_coordinates(r=r, phi=phi)
             J_field[idx, :] = self.get_current_density_field_elliptical_coordinates(r=r, phi=phi)
         
-        F_field = self.get_force_density_field_elliptical_coordinates(J_field=J_field, B_field=B_field)
+        # Get the force density in N/
+        F_field = self.get_force_density_field_elliptical_coordinates(J_field=J_field, B_field=B_field*1e9)
 
         if two_fold:
             r_range = np.concatenate([-np.flip(r_range[1:]), r_range])
@@ -212,60 +223,71 @@ class EllipticalCylindricalModel(MFRBaseModel):
             F_field = np.vstack([np.flipud(F_field[1:, :]), F_field])
 
         # Extract the poloidal and axial components of the magnetic field and current density, and calculate the magnitude of the fields.
+        B_radial: np.ndarray = B_field[:, 0]
         B_poloidal: np.ndarray = B_field[:, 1]
         B_z: np.ndarray = B_field[:, 2]
-        B_magnitude: np.ndarray = self.get_magnitude_elliptical_basis(B_field[:, 0], B_field[:, 1], B_field[:, 2], r_range, phi_range)
+        B_magnitude: np.ndarray = self.get_magnitude_elliptical_basis(B_radial, B_poloidal, B_z, r_range, phi_range)
 
+        J_radial: np.ndarray = J_field[:, 0]
         J_poloidal: np.ndarray = J_field[:, 1]
         J_z: np.ndarray = J_field[:, 2]
-        J_magnitude: np.ndarray = np.sqrt(np.square(J_poloidal) + np.square(J_z))
+        J_magnitude: np.ndarray = self.get_magnitude_elliptical_basis(J_radial, J_poloidal, J_z, r_range, phi_range)
 
         F_radial: np.ndarray = F_field[:, 0]
         F_poloidal: np.ndarray = F_field[:, 1]
         F_z: np.ndarray = F_field[:, 2]
-        F_magnitude: np.ndarray = np.sqrt(np.square(J_poloidal) + np.square(J_z))
+        F_magnitude: np.ndarray = self.get_magnitude_elliptical_basis(F_radial, F_poloidal, F_z, r_range, phi_range)
 
         # Normalise the MFR dimensions by the R parameter.
         if normalise_radial_coordinate:
             r_range /= self.R
             radial_label = "r/R"
         else:
-            radial_label = "r [AU]"
+            radial_label = "r (AU)"
 
         if plot:
+            r_min = r_range.min()
+            r_max = r_range.max()
+
             fig, ax = plt.subplots(3, 1, tight_layout=True, figsize=fig_size)
-            ax[0].plot(r_range, B_poloidal)
-            ax[0].plot(r_range, B_z)
-            ax[0].plot(r_range, B_magnitude)
-            ax[0].legend(["$B_{\\phi}$", "$B_z$", "$|B|$"])
-            ax[0].set_xlim(r_range.min(), r_range.max())
-            ax[0].grid(alpha=0.35)
+            ax[0].plot(r_range, B_radial, label="$B_r$")
+            ax[0].plot(r_range, B_poloidal, label="$B_\\phi$")
+            ax[0].plot(r_range, B_z, label="$B_z$")
+            ax[0].plot(r_range, B_magnitude, label="$|B|$")
+            ax[0].legend()
+            ax[0].set_xlim(r_min, r_max)
             ax[0].set_title("Radial coordinate sweep")
             ax[0].set_xlabel(radial_label)
-            ax[0].set_ylabel("Magnetic field")
+            ax[0].set_ylabel("Magnetic field (nT)")
 
-            ax[1].plot(r_range, J_poloidal)
-            ax[1].plot(r_range, J_z)
-            ax[1].plot(r_range, J_magnitude)
-            ax[1].legend(["$J_{\\phi}$", "$J_z$", "$|J|$"])
-            ax[1].set_xlim(r_range.min(), r_range.max())
+            ax[1].plot(r_range, J_radial, label="$J_r$")
+            ax[1].plot(r_range, J_poloidal, label="$J_\\phi$")
+            ax[1].plot(r_range, J_z, label="$J_z$")
+            ax[1].plot(r_range, J_magnitude, label="$|J|$")
+            ax[1].legend()
+            ax[1].set_xlim(r_min, r_max)
             ax[1].grid(alpha=0.35)
             ax[1].set_xlabel(radial_label)
-            ax[1].set_ylabel("Current density")
+            ax[1].set_ylabel("Current density (pA/$m^2$)")
 
-            ax[2].plot(r_range, F_radial)
-            ax[2].plot(r_range, F_poloidal)
-            ax[2].plot(r_range, F_z)
-            ax[2].plot(r_range, F_magnitude)
+            ax[2].plot(r_range, F_radial, label="$F_r$")
+            ax[2].plot(r_range, F_poloidal, label="$F_\\phi$")
+            ax[2].plot(r_range, F_z, label="$F_z$")
+            ax[2].plot(r_range, F_magnitude, label="$|F|$")
             ax[2].legend(["$F_r$", "$F_{\\phi}$", "$F_z$", "$|F|$"])
-            ax[2].set_xlim(r_range.min(), r_range.max())
+            ax[2].set_xlim(r_min, r_max)
             ax[2].grid(alpha=0.35)
             ax[2].set_xlabel(radial_label)
-            ax[2].set_ylabel("Force density")
+            ax[2].set_ylabel("Force density (nN)")
+
+            for axis in ax:
+                axis.grid(which="major", alpha=0.5)
+                axis.grid(which="minor", alpha=0.25, linestyle=':')
+                axis.minorticks_on()
 
             plt.show()
 
-        return r_range, B_field, J_field
+        return r_range, B_field, J_field, F_field
     
     def radial_and_angular_sweep(self,
                                  r_num_points: int = 51,
@@ -310,49 +332,53 @@ class EllipticalCylindricalModel(MFRBaseModel):
         J_phi = J_field[:, :, 1]
         J_z = J_field[:, :, 2]
 
-        # Normalise the MFR dimensions by the R parameter.
+        # Normalise the MFR dimensions by the R parameter if desired.
         if normalise_radial_coordinate:
             x /= self.R
             y /= self.R
             x_label = "x/R"
             y_label = "y/R"
         else:
-            x_label = "x [AU]"
-            y_label = "y [AU]"
+            x_label = "x (AU)"
+            y_label = "y (AU)"
 
         if plot:
-            # Make the 3D plot of the poloidal and axial magnetic field.
-            fig, ax = plt.subplots(2, 2, figsize=fig_size, subplot_kw={"projection": "3d"})
+            # Make the 3D plot of the poloidal and axial magnetic and current density fields.
+            fig, ax = plt.subplots(2, 2, figsize=fig_size, subplot_kw={"projection": "3d"}, tight_layout=True)
 
             B_phi_abs = np.abs(B_phi)
             norm_1 = matplotlib.colors.Normalize(vmin=np.min(B_phi_abs), vmax=np.max(B_phi_abs))
             scalar_mappable_1 = cm.ScalarMappable(cmap=cm.coolwarm, norm=norm_1)
             ax[0][0].plot_surface(x, y, B_phi, linewidth=0, facecolors=scalar_mappable_1.to_rgba(B_phi_abs), shade=False)
             ax[0][0].set_box_aspect([self.delta, 1, 1])
-            ax[0][0].set_title("$B_{\\phi}$")
+            # ax[0][0].set_title(r"$B_{\phi}$")
             ax[0][0].set_xlabel(x_label)
             ax[0][0].set_ylabel(y_label)
+            ax[0][0].set_zlabel(r"$B_{\phi}$")
 
             B_z_abs = np.abs(B_z)
             norm_2 = matplotlib.colors.Normalize(vmin=np.min(B_z_abs), vmax=np.max(B_z_abs))
             scalar_mappable_2 = cm.ScalarMappable(cmap=cm.coolwarm, norm=norm_2)
             ax[0][1].plot_surface(x, y, B_z, linewidth=0, facecolors=scalar_mappable_2.to_rgba(B_z), shade=False)
             ax[0][1].set_box_aspect([self.delta, 1, 1])
-            ax[0][1].set_title("$B_z$")
+            # ax[0][1].set_title("$B_z$")
             ax[0][1].set_xlabel(x_label)
             ax[0][1].set_ylabel(y_label)
+            ax[0][1].set_zlabel("$B_z$")
 
             ax[1][0].plot_surface(x, y, J_phi, cmap=cm.coolwarm)
             ax[1][0].set_box_aspect([self.delta, 1, 1])
-            ax[1][0].set_title("$J_{\\phi}$")
+            # ax[1][0].set_title(r"$J_{\phi}$")
             ax[1][0].set_xlabel(x_label)
             ax[1][0].set_ylabel(y_label)
+            ax[1][0].set_zlabel(r"$J_{\phi}$")
 
             ax[1][1].plot_surface(x, y, J_z, cmap=cm.coolwarm)
             ax[1][1].set_box_aspect([self.delta, 1, 1])
-            ax[1][1].set_title("$J_z$")
+            # ax[1][1].set_title("$J_z$")
             ax[1][1].set_xlabel(x_label)
             ax[1][1].set_ylabel(y_label)
+            ax[1][1].set_zlabel("$J_z$")
 
             # Link the axes movement together.
             on_move: callable = self._link_3D_axes_view(fig, ax)
@@ -377,7 +403,7 @@ class EllipticalCylindricalModel(MFRBaseModel):
         r_range = r_range[1:]
 
         # Create the angular range.
-        phi_range: np.ndarray = np.linspace(start=0, stop=2 * math.pi, num=phi_num_points, endpoint=True)
+        phi_range: np.ndarray = np.linspace(start=0, stop=2*math.pi, num=phi_num_points, endpoint=True)
 
         return r_range, phi_range
 
@@ -400,7 +426,7 @@ class EllipticalCylindricalModel(MFRBaseModel):
             fig, ax = plt.subplots(tight_layout=True, figsize=fig_size)
         else:
             ax = axis
-        ax.plot(boundary[:, 0] * scale_factor, boundary[:, 1] * scale_factor)
+        ax.plot(boundary[:, 0] * scale_factor, boundary[:, 1] * scale_factor, c="b", label="MFR boundary")
 
         for vector_origin, vector_end in vector_dict.values():
             ax.quiver(vector_origin[0] * scale_factor, vector_origin[1] * scale_factor, vector_end[0] * scale_factor, vector_end[1] * scale_factor)
@@ -412,9 +438,10 @@ class EllipticalCylindricalModel(MFRBaseModel):
         ax.legend(legend)
         ax.axhline(y=0, color="k", alpha=0.35)
         ax.axvline(x=0, color="k", alpha=0.35)
-        if abs(self.psi) >1e-9:
+
+        if self.psi > 1e-5:
             # If psi is not zero, the natural axis of the MFR are angled with an angle psi.
-            ax.axline((0, 0), slope=math.tan(self.psi), color="g", alpha=0.5)
+            ax.axline((0, 0), slope=math.tan(self.psi), color="g", alpha=0.5, label="Natural MFR axis")
             ax.axline((0, 0), slope=-1 / math.tan(self.psi), color="g", alpha=0.5)
         ax.set_aspect("equal")
         ax.grid(alpha=0.35)
@@ -429,6 +456,31 @@ class EllipticalCylindricalModel(MFRBaseModel):
         ax.set_title("Magnetic flux rope boundary")
         if axis is None:
             plt.show()
+    
+    def plot_crossing_trajectory(self, df: pd.DataFrame) -> None:
+        N: int = len(df)
+
+        fig, ax = plt.subplots(1, 2, figsize=(14, 7), tight_layout=True)
+        self.plot_boundary(axis=ax[0])
+        ax[0].plot(df["x"], df["y"], c="r", label="Trajectory $x-y$")
+        ax[0].scatter(0, df["y"][0], c="r")
+        ax[0].scatter(df["x"][0], df["y"][0], c="k", marker="x", label="Entry point")
+        ax[0].scatter(df["x"][N - 1], df["y"][N - 1], c="m", marker="x", label="Exit point")
+        ax[0].legend()
+
+        ax[1].plot(df["x"], df["z"], c="r", label="Trajectory $x-z$")
+        ax[1].axvline(df["x"][0], c="b")
+        ax[1].axvline(np.max(df["x"]), c="b")
+        ax[1].scatter([0], [0], c="r")
+        ax[1].scatter(df["x"][0], df["z"][0], c="k", marker="x", label="Entry point")
+        ax[1].scatter(df["x"][N - 1], df["z"][N - 1], c="m", marker="x", label="Exit point")
+        ax[1].legend()
+        ax[1].set_xlabel("x [AU]")
+        ax[1].set_ylabel("z [AU]")
+        ax[1].set_title("Lateral view of the trajectory")
+        ax[1].axis("equal")
+        ax[1].grid(alpha=0.35)
+        plt.show()
 
     def find_intersection_points_rot(self, y_0: float, theta: float) -> tuple[np.ndarray | None, np.ndarray | None]:
         # The trajectory will pass through [0, y_0, 0].
@@ -558,12 +610,14 @@ class EllipticalCylindricalModel(MFRBaseModel):
     def simulate_crossing(self,
                           v_sc: float,
                           y_0: float = 0.0,
+                          gamma: float = 0.0,
                           theta: float = 0.0,
                           time_stencil: int = 51,
                           noise_type: str | None = None,
                           epsilon: float = 0.05,
                           initial_time: float = 0.0,
                           initial_datetime: datetime.datetime | None = None,
+                          is_fitting: bool = False,
                           random_seed: int = 0) -> pd.DataFrame | None:
         """Simulate the crossing of a spacecraft (S/C) through the magnetic flux rope. Simulate the measurements of the S/C through it.
         Currently, only straight trajectories at constant speed are supported.
@@ -591,7 +645,7 @@ class EllipticalCylindricalModel(MFRBaseModel):
         # velocity_sc: np.ndarray = v_sc_metres_per_second * np.array([math.cos(theta), 0, math.sin(theta)])
 
         # Start by resolving the geometrical trajectory of the spacecraft.
-        time_range, x_tajectory, y_trajectory, z_trajectory, does_intersect = self._resolve_trajectory(v_sc_metres_per_second, y_0, theta, time_stencil)
+        time_range, x_tajectory, y_trajectory, z_trajectory, does_intersect = self._resolve_trajectory(v_sc_metres_per_second, y_0, theta, time_stencil) # theta
 
         if not does_intersect:
             # The crossing set by the crossing parameters does not intersect the flux-rope.
@@ -615,19 +669,22 @@ class EllipticalCylindricalModel(MFRBaseModel):
             z: float = elliptical_coordinates[2]
 
             B_field_elliptical: np.ndarray = self.get_magnetic_field_elliptical_coordinates(r, phi)
-            J_field_elliptical: np.ndarray = self.get_current_density_field_elliptical_coordinates(r, phi)
 
             # Convert the elliptical components of the vector fields back to Cartesian.
             B_field[idx, :] = self.convert_elliptical_to_cartesian_vector(
                 B_field_elliptical[0], B_field_elliptical[1], B_field_elliptical[2], r=r, phi=phi
             )
-            J_field[idx, :] = self.convert_elliptical_to_cartesian_vector(
-                J_field_elliptical[0], J_field_elliptical[1], J_field_elliptical[2], r=r, phi=phi
-            )
 
-        close_to_zero_tolerance: float = 1e-15
-        B_field[np.abs(B_field) < close_to_zero_tolerance] = 0
-        J_field[np.abs(J_field) < 1e-6] = 0
+            if not is_fitting:
+                J_field_elliptical: np.ndarray = self.get_current_density_field_elliptical_coordinates(r, phi)
+                J_field[idx, :] = self.convert_elliptical_to_cartesian_vector(
+                    J_field_elliptical[0], J_field_elliptical[1], J_field_elliptical[2], r=r, phi=phi
+                )
+
+        if not is_fitting:
+            close_to_zero_tolerance: float = 1e-15
+            B_field[np.abs(B_field) < close_to_zero_tolerance] = 0
+            J_field[np.abs(J_field) < 1e-6] = 0
 
         # Add noise to simulate measurement error, if the user wants it.
         if noise_type is not None:
@@ -636,18 +693,19 @@ class EllipticalCylindricalModel(MFRBaseModel):
             B_field[:, 0] += noise_generator.generate_noise(num_points)
             B_field[:, 1] += noise_generator.generate_noise(num_points)
             B_field[:, 2] += noise_generator.generate_noise(num_points)
-            J_field[:, 0] += noise_generator.generate_noise(num_points)
-            J_field[:, 1] += noise_generator.generate_noise(num_points)
-            J_field[:, 2] += noise_generator.generate_noise(num_points)
 
-        # We need to change the magnetic field and current density to the new coordinates (rotated by theta).
-        # We can do this by applying the rotation matrix.
-        cos_theta = math.cos(-theta)
-        sin_theta = math.sin(-theta)
-        rotation_matrix = np.array([[cos_theta, 0, sin_theta], [0, 1, 0], [-sin_theta, 0, cos_theta]])
+            if not is_fitting:
+                J_field[:, 0] += noise_generator.generate_noise(num_points)
+                J_field[:, 1] += noise_generator.generate_noise(num_points)
+                J_field[:, 2] += noise_generator.generate_noise(num_points)
 
-        B_field = B_field @ rotation_matrix
-        J_field = J_field @ rotation_matrix
+        if gamma is not None and theta is not None:
+            # We need to change the magnetic field and current density to the new coordinates (rotated by gamma and theta).
+            # We can do this by applying the rotation matrix.
+            rotation_matrix: np.ndarray = self.convert_local_to_gse_coordinates(gamma, theta)
+
+            B_field = B_field @ rotation_matrix
+            J_field = J_field @ rotation_matrix
 
         # Join all the simulated measurements on a pandas data frame.
         df = pd.DataFrame()
@@ -655,84 +713,43 @@ class EllipticalCylindricalModel(MFRBaseModel):
         if initial_datetime is not None:
             df["datetime"] = initial_datetime + pd.to_timedelta(time_range, unit="s")
 
-        df["x"] = x_tajectory
-        df["y"] = y_trajectory
-        df["z"] = z_trajectory
+        if not is_fitting:
+            df["x"] = x_tajectory
+            df["y"] = y_trajectory
+            df["z"] = z_trajectory
 
         df["B_x"] = B_field[:, 0]
         df["B_y"] = B_field[:, 1]
         df["B_z"] = B_field[:, 2]
         df["B"] = self.cartesian_vector_magnitude(B_field[:, 0], B_field[:, 1], B_field[:, 2])
 
-        df["J_x"] = J_field[:, 0]
-        df["J_y"] = J_field[:, 1]
-        df["J_z"] = J_field[:, 2]
-        df["J"] = self.cartesian_vector_magnitude(J_field[:, 0], J_field[:, 1], J_field[:, 2])
+        if not is_fitting:
+            df["J_x"] = J_field[:, 0]
+            df["J_y"] = J_field[:, 1]
+            df["J_z"] = J_field[:, 2]
+            df["J"] = self.cartesian_vector_magnitude(J_field[:, 0], J_field[:, 1], J_field[:, 2])
 
-        F_field = self.get_force_density_field_elliptical_coordinates(B_field=B_field, J_field=J_field)
-        df["F_x"] = F_field[:, 0]
-        df["F_y"] = F_field[:, 1]
-        df["F_z"] = F_field[:, 2]
-        df["F"] = self.cartesian_vector_magnitude(F_field[:, 0], F_field[:, 1], F_field[:, 2])
+            F_field = self.get_force_density_field_elliptical_coordinates(B_field=B_field, J_field=J_field)
+            df["F_x"] = F_field[:, 0]
+            df["F_y"] = F_field[:, 1]
+            df["F_z"] = F_field[:, 2]
+            df["F"] = self.cartesian_vector_magnitude(F_field[:, 0], F_field[:, 1], F_field[:, 2])
 
         return df
+    
+    @staticmethod
+    def convert_local_to_gse_coordinates(gamma: float, theta: float) -> np.ndarray:
+        # Longitude: gamma -> angle of MFR x-axis with respect to the GSE x-axis.
+        # Latitude: theta -> angle of MFR z-axis with respect to the GSE y-axis.
+        cos_gamma = math.cos(gamma)
+        sin_gamma = math.sin(gamma)
 
-    def plot_vs_time(self,
-                     data: pd.DataFrame,
-                     magnitude_names: str | list[str],
-                     colour: str | list[str],
-                     time_units: str = "s",
-                     datetime_axis: bool = False,
-                     marker: str = "o",
-                     linestyle: str = "-",
-                     markersize: str = 4,
-                     ax: matplotlib.axis.Axis| None = None) -> None | matplotlib.axis.Axis:
-        if isinstance(magnitude_names, str):
-            magnitude_names = [magnitude_names]
-        
-        if isinstance(colour, str):
-            colour = [colour]
+        cos_theta = math.cos(theta)
+        sin_theta = math.sin(theta)
 
-        axis_provided: bool = ax is not None
-
-        # Extract the time from the dataframe.
-        if not datetime_axis:
-            time = data["time"].to_numpy(copy=True)
-            if time_units in {"min", "minute"}:
-                time /= 60
-            elif time_units in {"h", "hour"}:
-                time /= 60 * 60
-            elif time_units == "day":
-                time /= 24 * 60 * 60
-        else:
-            time = data["datetime"]
-
-        time_min = np.min(time)
-        time_max = np.max(time)
-
-        if not axis_provided:
-            _, ax = plt.subplots(1, 1, tight_layout=True)
-
-        for idx, magnitude_name in enumerate(magnitude_names):
-            # Extract the magnitude to plot from the dataframe, and its units.
-            magnitude_to_plot = data[magnitude_name].to_numpy(copy=True)
-            magnitude_units = self._units[magnitude_name]
-            ax.plot(time, magnitude_to_plot, marker=marker, linestyle=linestyle, markersize=markersize, color=colour[idx])
-            if datetime_axis:
-                ax.set_xlabel("datetime")
-            else:
-                ax.set_xlabel(f"time [{time_units}]")
-            ax.set_ylabel(f"${magnitude_name}$ [{magnitude_units}]")
-            ax.grid(alpha=0.35)
-            ax.set_xlim(time_min, time_max)
-            # plt.gcf().axes[0].yaxis.get_major_formatter().set_scientific(False)
-
-        plt.legend([f"${mag}$" for mag in magnitude_names])
-
-        if not axis_provided:
-            plt.show()
-        else:
-            return ax
+        return np.array([[cos_gamma, sin_gamma * sin_theta, -sin_gamma * cos_theta],
+                        [sin_gamma, -cos_gamma * sin_theta, cos_gamma * cos_theta],
+                        [0, cos_theta, sin_theta]])
         
     @abc.abstractmethod
     def get_magnetic_field_elliptical_coordinates(self, r: float, phi: float) -> np.ndarray:
