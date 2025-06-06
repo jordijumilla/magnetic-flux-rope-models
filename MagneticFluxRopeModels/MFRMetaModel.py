@@ -154,6 +154,7 @@ def sweep_2d(x1: ParameterRange, x2: ParameterRange, x_fixed: dict[str, float], 
     ax.set_ylabel(f"{label_mapping[x2.name]}")
     ax.set_zlabel(f"{label_mapping[target_name]}")
     ax.set_zlim(0)
+    ax.set_box_aspect(None, zoom=0.9)
     plt.title(f"Error surface for {label_mapping[target_name]}")
     plt.show()
 
@@ -395,14 +396,24 @@ def fit_regression_model(df: pd.DataFrame, params_fitted: list[str], target_name
         rmse_test = np.nan
         r2_test = np.nan
 
+    # Evaluate the model on all data
+    y_pred_all = predict_with_model(model_result, X_ready)
+    y_all_inv_transformed = transform_inverse(y_scaler.inverse_transform(y_scaled.reshape(-1, 1)).flatten(), transform_type, transform_params)
+    if not np.any(np.isnan(y_pred_all)):
+        rmse_all = math.sqrt(mean_squared_error(y_all_inv_transformed, y_pred_all))
+        r2_all = r2_score(y_all_inv_transformed, y_pred_all)
+    else:
+        rmse_all = np.nan
+        r2_all = np.nan
+
     # Calculate the residuals on the transformed space, that is, where the model was trained
     model_result["train_residuals"] = model.predict(X_train) - y_train
     model_result["test_residuals"] = model.predict(X_test) - y_test
 
     stats = pd.DataFrame({
-        "RMSE": [rmse_train, rmse_test],
-        "R^2": [r2_train, r2_test]
-    }, index=["Train", "Test"])
+        "RMSE": [rmse_train, rmse_test, rmse_all],
+        "R^2": [r2_train, r2_test, r2_all]
+    }, index=["Train", "Test", "All"])
 
     model_result.update({           
         "transform_params": transform_params,

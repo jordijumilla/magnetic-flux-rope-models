@@ -161,6 +161,11 @@ class MFRBaseModel():
         
             if residue_method == "RMSE":
                 residue = math.sqrt(residue / len(df_observations))
+            elif residue_method == "MSE":
+                residue /= len(df_observations)
+        
+        elif residue_method == "SSE":
+            residue = ((df_observations[["B_x", "B_y", "B_z"]] - df_test[["B_x", "B_y", "B_z"]])**2).to_numpy().sum()
 
         elif residue_method == "X":
             # Method used by Nieves-Chinchilla et al. (2017) in "Elliptic-cylindrical Analytical Flux Rope Model for Magnetic Clouds"
@@ -296,6 +301,7 @@ class MFRBaseModel():
                      marker: str = "o",
                      linestyle: str = "-",
                      markersize: str = 4,
+                     alpha: float = 1.0,
                      fig_size: tuple[float, float] | None = None,
                      ax: matplotlib.axis.Axis| None = None) -> None | matplotlib.axis.Axis:
         if isinstance(magnitude_names, str):
@@ -328,7 +334,7 @@ class MFRBaseModel():
             # Extract the magnitude to plot from the dataframe, and its units.
             magnitude_to_plot = data[magnitude_name].to_numpy(copy=True)
             magnitude_units = self._units[magnitude_name]
-            ax.plot(time, magnitude_to_plot, marker=marker, linestyle=linestyle, markersize=markersize, color=colour[idx])
+            ax.plot(time, magnitude_to_plot, marker=marker, linestyle=linestyle, markersize=markersize, color=colour[idx], alpha=alpha)
             if datetime_axis:
                 ax.set_xlabel("datetime")
             else:
@@ -348,7 +354,7 @@ class MFRBaseModel():
             # If an axis was provided, return it and do not show the plot.
             return ax
 
-    def plot_crossing_magnetic_difference(self, df_to_fit: pd.DataFrame, df_fitted: pd.DataFrame) -> None:
+    def plot_crossing_magnetic_difference(self, df_to_fit: pd.DataFrame, df_fitted: pd.DataFrame, save_filename: str | None = None) -> None:
         """Plot the difference between the observed and fitted magnetic field components.
 
         Args:
@@ -356,10 +362,14 @@ class MFRBaseModel():
             df_fitted (pd.DataFrame): The fitted data.
         """
         _, ax = plt.subplots(figsize=(10, 6))
-        self.plot_vs_time(df_to_fit, ["B_x", "B_y", "B_z", "B"], colour=["r", "g", "b", "k"], time_units="h", ax=ax)
-        self.plot_vs_time(df_fitted, ["B_x", "B_y", "B_z", "B"], colour=["r", "g", "b", "k"], time_units="h", marker="^", linestyle="--", ax=ax)
-        ax.set_title("Magnetic field components comparison vs time")
-        plt.show()
+        self.plot_vs_time(df_to_fit, ["B_x", "B_y", "B_z", "B"], colour=["r", "g", "b", "k"], time_units="h", alpha=0.8, ax=ax)
+        self.plot_vs_time(df_fitted, ["B_x", "B_y", "B_z", "B"], colour=["r", "g", "b", "k"], time_units="h", marker=None, linestyle="--", alpha=0.8, ax=ax)
+        ax.set_title("Magnetic field components comparison vs time: simulated vs fitted")
+
+        if save_filename is not None:
+            plt.savefig(save_filename, bbox_inches="tight")
+        else:
+            plt.show()
 
     @staticmethod
     def _add_pickle_extension(file_path: str) -> str:
