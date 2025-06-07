@@ -1,5 +1,5 @@
+[![Run Python Tests](https://github.com/jordijumilla/magnetic-flux-rope-models/actions/workflows/run-python-tests.yml/badge.svg)](https://github.com/jordijumilla/magnetic-flux-rope-models/actions/workflows/run-python-tests.yml)
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://pre-commit.com/)
-![Tests](https://github.com/your-username/magnetic-flux-rope-models/actions/workflows/run-python-tests.yml/badge.svg)
 
 # Magnetic Flux Rope Models
 
