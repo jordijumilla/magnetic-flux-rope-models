@@ -483,11 +483,11 @@ def plot_model_results(models: dict, save_file_name: str | None = None) -> None:
         ]
 
         # now plot both limits against eachother
-        ax.plot(lims, lims, 'k--', alpha=0.5, zorder=0)
+        ax.plot(lims, lims, "k--", alpha=0.5, zorder=0)
         ax.grid(alpha=0.35)
         ax.set_xlabel(f"Actual {label_mapping[param]}")
         ax.set_ylabel(f"Predicted {label_mapping[param]}")
-        ax.set_title(f"{label_mapping[param]}: {model_result["model_label"]}")
+        ax.set_title(f"""{label_mapping[param]}: {model_result["model_label"]}""")
         ax.legend()
 
     if save_file_name:
@@ -521,13 +521,13 @@ def plot_residuals(models: dict, method: str, save_file_path: str | None = None)
             ax.axvline(test_mean, color=test_colour, linestyle="--", label=f"Test mean = {test_mean:.3f}")
             ax.set_xlabel(f"{label_mapping[param]} residual")
             ax.set_ylabel("Frequency")
-            ax.set_title(f"Histogram of residuals of {label_mapping[param]} fitted with {model_result["model_label"]}", fontsize=10)
+            ax.set_title(f"""Histogram of residuals of {label_mapping[param]} fitted with {model_result["model_label"]}""", fontsize=10)
             ax.legend()
         elif method == "Q-Q":
             scipy.stats.probplot(model_result["train_residuals"], dist="norm", plot=ax)
             # stats.probplot(model_result["test_residuals"], dist="norm", plot=ax)
         else:
-            raise ValueError("Invalid method. Choose 'histogram' or 'Q-Q'.")
+            raise ValueError("""Invalid method. Choose "histogram" or "Q-Q".""")
 
         ax = set_axis_grid_style(ax)
     
