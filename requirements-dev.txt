@@ -1,4 +1,6 @@
--r requirements-cp310-win_amd64.txt
+-r requirements.txt
+
+jupyter
 
 pytest
 coverage
