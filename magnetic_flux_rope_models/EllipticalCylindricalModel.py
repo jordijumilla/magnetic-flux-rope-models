@@ -11,7 +11,6 @@ import datetime
 
 
 class EllipticalCylindricalModel(MFRBaseModel):
-    """Common interface for ellipical-cylindrical symmetric MFR models. This includes circular-cylindrical models."""
     """Common interface for ellipical-cylindrical symmetric MFR models. This includes circular-cylindrical models,
     of which the elliptical-cylindrical geometry is a generalisation."""
 
@@ -68,8 +67,8 @@ class EllipticalCylindricalModel(MFRBaseModel):
     def get_area(self) -> float:
         return math.pi * self.R * self.R * self.delta
 
-    def get_elliptical_unit_basis(self, r: float | np.ndarray, phi: float | np.ndarray) -> np.ndarray:
-        """Calculate e_r and e_phi, given by the coordinate change:
+    def get_elliptical_basis(self, r: float | np.ndarray, phi: float | np.ndarray, unit_basis: bool = False) -> np.ndarray:
+        """Calculate the components of the elliptical-cylindrical vector basis $e_r$ and $e_phi$ in Cartesian coordinates, given by the coordinate change:
             x = delta * r * cos(phi + psi)
             y = r * sin(phi + psi)
             z = z
@@ -81,14 +80,13 @@ class EllipticalCylindricalModel(MFRBaseModel):
         if isinstance(r, (int, float)) and isinstance(phi, (int, float)):
             # Scalar case.
             epsilon_r: np.ndarray = [self.delta * math.cos(phi), math.sin(phi), 0]
-
-            # This vector should be scaled by r, but because we are normalising it later, we avoid the multiplication by r.
-            epsilon_phi: np.ndarray = np.array([-self.delta * math.sin(phi), math.cos(phi), 0])
+            epsilon_phi: np.ndarray = np.array([-self.delta * r * math.sin(phi), r * math.cos(phi), 0])
             epsilon_z: np.ndarray = np.array([0, 0, 1])
 
-            # Normalise the vectors.
-            epsilon_r /= np.linalg.norm(epsilon_r)
-            epsilon_phi /= np.linalg.norm(epsilon_phi)
+            if unit_basis:
+                # Normalise the vectors.
+                epsilon_r /= np.linalg.norm(epsilon_r)
+                epsilon_phi /= np.linalg.norm(epsilon_phi)
 
             basis: np.ndarray = np.stack([epsilon_r, epsilon_phi, epsilon_z]).T
             return self.psi_rotation_matrix @ basis
@@ -98,20 +96,22 @@ class EllipticalCylindricalModel(MFRBaseModel):
             epsilon_r: np.ndarray = np.vstack([self.delta * np.cos(phi), np.sin(phi), np.zeros_like(r)]).T
 
             # This vector should be scaled by r, but because we are normalising it later, we avoid the multiplication by r.
-            epsilon_phi: np.ndarray = np.vstack([-self.delta * np.sin(phi), np.cos(phi), np.zeros_like(r)]).T
+            epsilon_phi: np.ndarray = np.vstack([-self.delta * r * np.sin(phi), r * np.cos(phi), np.zeros_like(r)]).T
             epsilon_z: np.ndarray = np.vstack([np.zeros_like(r), np.zeros_like(r), np.ones_like(r)]).T
 
-            # Normalise the vectors.
-            epsilon_r /= np.linalg.norm(epsilon_r, axis=1, keepdims=True)
-            epsilon_phi /= np.linalg.norm(epsilon_phi, axis=1, keepdims=True)
+            if unit_basis:
+                # Normalise the vectors.
+                epsilon_r /= np.linalg.norm(epsilon_r, axis=1, keepdims=True)
+                epsilon_phi /= np.linalg.norm(epsilon_phi, axis=1, keepdims=True)
 
             basis: np.ndarray = np.stack([epsilon_r, epsilon_phi, epsilon_z], axis=-1)
             return np.matmul(self.psi_rotation_matrix, basis)
 
     def convert_elliptical_to_cartesian_vector(self, v_r: float, v_phi: float, v_z: float, r: float, phi: float) -> np.ndarray:
         # Because the change of basis is not constant, we have to get the basis change matrix at this (r, phi) coordinate.
-        elliptical_to_cartesian_basis_change_matrix: np.ndarray = self.get_elliptical_unit_basis(r=r, phi=phi)
-        if isinstance(v_r, float) and isinstance(v_phi, float) and isinstance(v_z, float):
+        elliptical_to_cartesian_basis_change_matrix: np.ndarray = self.get_elliptical_basis(r=r, phi=phi, unit_basis=False)
+
+        if isinstance(v_r, (int, float)) and isinstance(v_phi, (int, float)) and isinstance(v_z, (int, float)):
             # Scalar case.
             return np.array([v_r, v_phi, v_z]) @ elliptical_to_cartesian_basis_change_matrix.T
         else:
@@ -223,8 +223,13 @@ class EllipticalCylindricalModel(MFRBaseModel):
                                        v_z: float | np.ndarray,
                                        r: float | np.ndarray,
                                        phi: float | np.ndarray) -> float | np.ndarray:
-        cartesian_vector = self.convert_elliptical_to_cartesian_vector(v_r, v_phi, v_z, r, phi)
-        return self.cartesian_vector_magnitude(cartesian_vector[:, 0], cartesian_vector[:, 1], cartesian_vector[:, 2])
+        # Convert the vector from elliptical to Cartesian coordinates.
+        cartesian_vector = self.convert_elliptical_to_cartesian_vector(v_r=v_r, v_phi=v_phi, v_z=v_z, r=r, phi=phi)
+        
+        if cartesian_vector.ndim == 1:
+            return self.cartesian_vector_magnitude(cartesian_vector[0], cartesian_vector[1], cartesian_vector[2])
+        else:
+            return self.cartesian_vector_magnitude(cartesian_vector[:, 0], cartesian_vector[:, 1], cartesian_vector[:, 2])
 
     def radial_coordinate_sweep(self, phi: float = 0,
                                 num_points: int = 51,
@@ -732,7 +737,7 @@ class EllipticalCylindricalModel(MFRBaseModel):
         if not is_fitting:
             close_to_zero_tolerance: float = 1e-15
             B_field[np.abs(B_field) < close_to_zero_tolerance] = 0
-            J_field[np.abs(J_field) < 1e-6] = 0
+            J_field[np.abs(J_field) < close_to_zero_tolerance] = 0
 
         # Add noise to simulate measurement error, if the user wants it.
         if noise_type is not None:
