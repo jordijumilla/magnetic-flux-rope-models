@@ -38,7 +38,8 @@ jobs:
       if: always()
       run: |
         echo "### Coverage Report" >> $GITHUB_STEP_SUMMARY
-        coverage report >> $GITHUB_STEP_SUMMARY
+        ls -l .coverage
+        coverage report >> $GITHUB_STEP_SUMMARY || true
 
     - name: Upload coverage artifact
       if: always()
