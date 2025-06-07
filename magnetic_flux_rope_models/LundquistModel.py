@@ -30,9 +30,8 @@ class LundquistModel(EllipticalCylindricalModel):
             B_z_0 (float, optional): Axial magnetic field in the centre (in nT). Defaults to 10.0.
             handedness (int, optional): Positive handedness (+1) or negative handedness (-1). Defaults to +1.
         """
-        # Initialise the EllipticalCylindricalModel superclass.
+        # Initialise the EllipticalCylindricalModel superclass. Lundquist model is circular, hence delta = 1.0 (and psi does not matter, so we set it to 0).
         super().__init__(delta=1.0, R=R, psi=0.0)
-        
 
         # LundquistModel field parameters:
         self.alpha: float = alpha
@@ -75,7 +74,6 @@ class LundquistModel(EllipticalCylindricalModel):
 
         if self.handedness not in [-1, 1]:
             raise ValueError("Parameter: handedness must be in {-1, 1}")
-
 
     def __repr__(self) -> str:
         """Create nice string to display the parameters of the model to the user in a string format."""
@@ -129,6 +127,8 @@ class LundquistModel(EllipticalCylindricalModel):
 
         # TODO: Review this calculation.
         J_phi: float = self.B_z_0 * bessel_1 * alpha_over_R
+
+        # Regularisation tolerance to avoid division by zero.
         eps = 1e-12
         J_z: float = (self.handedness * self.B_z_0 / (r + eps)) * (bessel_1 + 0.5 * r * alpha_over_R * (bessel_0 - bessel_2))
 
