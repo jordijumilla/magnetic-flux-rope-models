@@ -1,4 +1,4 @@
-from MagneticFluxRopeModels.ECModel import ECModel
+from magnetic_flux_rope_models.ECModel import ECModel
 import numpy as np
 
 def test_B_z_0():

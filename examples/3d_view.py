@@ -3,7 +3,7 @@ sys.path.append("../MagneticFluxRopeModels")
 
 import numpy as np
 import matplotlib.pyplot as plt
-from MagneticFluxRopeModels.CCModel import CCModel
+from magnetic_flux_rope_models.CCModel import CCModel
 import math
 
 
