@@ -12,6 +12,8 @@ import datetime
 
 class EllipticalCylindricalModel(MFRBaseModel):
     """Common interface for ellipical-cylindrical symmetric MFR models. This includes circular-cylindrical models."""
+    """Common interface for ellipical-cylindrical symmetric MFR models. This includes circular-cylindrical models,
+    of which the elliptical-cylindrical geometry is a generalisation."""
 
     def __init__(self, delta: float, R: float, psi: float) -> None:
         super().__init__()
@@ -32,7 +34,7 @@ class EllipticalCylindricalModel(MFRBaseModel):
         if not isinstance(self.delta, (int, float)):
             raise TypeError("Parameter: delta must be an integer or float.")
         if not (0 < self.delta <= 1):
-            raise ValueError("Parameter: delta must be in (0,1].")
+            raise ValueError(f"Parameter: delta must be in (0, 1], but {self.delta} was provided.")
         
         # Parameter: R.
         if not isinstance(self.R, (int, float)):
@@ -47,6 +49,9 @@ class EllipticalCylindricalModel(MFRBaseModel):
             raise ValueError("Parameter: psi must be in [0, pi).")
 
     def _calculate_derived_parameters(self):
+        """Calculate the derived parameters of the elliptical-cylindrical model.
+        This includes the magnitudes that are derived from the geometrical parameters delta, R and psi.
+        """
         # Delta-related magnitudes:
         self.delta_squared = self.delta * self.delta
 
@@ -126,7 +131,7 @@ class EllipticalCylindricalModel(MFRBaseModel):
             Returns:
             np.ndarray: The elliptical basis metric, a 3x3 matrix.
         """
-        elliptical_basis: np.ndarray = self.get_elliptical_unit_basis(r, phi)
+        elliptical_basis: np.ndarray = self.get_elliptical_basis(r=r, phi=phi, unit_basis=True)
         elliptical_basis_metric = elliptical_basis.T @ elliptical_basis
         return elliptical_basis_metric
 
@@ -192,7 +197,7 @@ class EllipticalCylindricalModel(MFRBaseModel):
 
     def compute_scale_factors(self, r: float, phi: float) -> np.ndarray:
         """Compute the scale factors h_r, h_phi, h_z."""
-        elliptical_basis: np.ndarray = self.get_elliptical_unit_basis(r=r, phi=phi)
+        elliptical_basis: np.ndarray = self.get_elliptical_basis(r=r, phi=phi, unit_basis=True)
         return np.sqrt(np.sum(np.square(elliptical_basis), axis=0))
     
     def get_h(self, phi: float) -> float:
@@ -250,17 +255,17 @@ class EllipticalCylindricalModel(MFRBaseModel):
         B_radial: np.ndarray = B_field[:, 0]
         B_poloidal: np.ndarray = B_field[:, 1]
         B_z: np.ndarray = B_field[:, 2]
-        B_magnitude: np.ndarray = self.get_magnitude_elliptical_basis(B_radial, B_poloidal, B_z, r_range, phi_range)
+        B_magnitude: np.ndarray = self.get_magnitude_elliptical_basis(v_r=B_radial, v_phi=B_poloidal, v_z=B_z, r=r_range, phi=phi_range)
 
         J_radial: np.ndarray = J_field[:, 0]
         J_poloidal: np.ndarray = J_field[:, 1]
         J_z: np.ndarray = J_field[:, 2]
-        J_magnitude: np.ndarray = self.get_magnitude_elliptical_basis(J_radial, J_poloidal, J_z, r_range, phi_range)
+        J_magnitude: np.ndarray = self.get_magnitude_elliptical_basis(v_r=J_radial, v_phi=J_poloidal, v_z=J_z, r=r_range, phi=phi_range)
 
         F_radial: np.ndarray = F_field[:, 0]
         F_poloidal: np.ndarray = F_field[:, 1]
         F_z: np.ndarray = F_field[:, 2]
-        F_magnitude: np.ndarray = self.get_magnitude_elliptical_basis(F_radial, F_poloidal, F_z, r_range, phi_range)
+        F_magnitude: np.ndarray = self.get_magnitude_elliptical_basis(v_r=F_radial, v_phi=F_poloidal, v_z=F_z, r=r_range, phi=phi_range)
 
         # Normalise the MFR dimensions by the R parameter.
         if normalise_radial_coordinate:
