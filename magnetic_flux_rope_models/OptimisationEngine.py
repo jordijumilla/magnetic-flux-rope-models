@@ -61,13 +61,4 @@ class OptimisationEngine:
         #self.model = model
         self.optimisation_parameters: list[OptimisationParameter] = [OptimisationParameter(name=op_name, options=op_options) for op_name, op_options in optimisation_parameters.items()]
 
-
-if __name__ == "__main__":
-    optimisation_parameters = {
-        "delta": {"mode": "optimised", "initial_value": 0.8, "bounds": [0.5, 1]},
-        "y_0": {"mode": "optimised", "initial_value": 0.0, "bounds": [-0.95, 0.95]},
-        "n": {"mode": "fixed", "value": 1, "type": "int"},
-    }
-    opt_eng = OptimisationEngine(optimisation_parameters)
-    print(opt_eng.optimisation_parameters)
     
