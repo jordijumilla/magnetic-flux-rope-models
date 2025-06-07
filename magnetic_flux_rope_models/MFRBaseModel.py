@@ -229,7 +229,7 @@ class MFRBaseModel():
         # Check if there is convergence.
         if info["warnflag"] != 0:
             # TODO: Restart the optimisation with a different initial guess.
-            print(f"Optimisation did not converge: {info["warnflag"]}.")
+            print(f"""Optimisation did not converge: {info["warnflag"]}.""")
             return None, None, None, None, info
 
         model_parameters_opt = {p.name: x_opt[idx] for idx, p in enumerate(model_parameters_to_optimise)}
