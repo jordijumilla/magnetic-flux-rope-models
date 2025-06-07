@@ -1,7 +1,6 @@
 import abc
 import math
 import matplotlib
-import matplotlib.axis
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -18,8 +17,8 @@ class EllipticalCylindricalModel(MFRBaseModel):
         super().__init__()
 
         # Geometrical.
-        self.delta: float = delta
         self.R: float = R
+        self.delta: float = delta
         self.psi: float = psi
 
         # Validate these parameters
@@ -122,7 +121,7 @@ class EllipticalCylindricalModel(MFRBaseModel):
     def evaluate_ellipse_equation(self, x: float, y: float, z: float) -> float:
         return (self.delta * x) ** 2 + y**2 - self.R**2
 
-    def convert_elliptical_to_cartesian_cordinates(
+    def convert_elliptical_to_cartesian_coordinates(
         self, r: float | np.ndarray, phi: float | np.ndarray, z: float | np.ndarray
     ) -> np.ndarray:
         """Convert from elliptical coordinates (r, phi, z) to Cartesian."""
@@ -322,7 +321,7 @@ class EllipticalCylindricalModel(MFRBaseModel):
                 J_field[r_idx, phi_idx, :] = self.get_current_density_field_elliptical_coordinates(r, phi)
 
                 # Convert the elliptical coordinates to Cartesian.
-                cartesian_coordinates: np.ndarray = self.convert_elliptical_to_cartesian_cordinates(r, phi, 0)
+                cartesian_coordinates: np.ndarray = self.convert_elliptical_to_cartesian_coordinates(r, phi, 0)
                 x[r_idx, phi_idx] = cartesian_coordinates[0]
                 y[r_idx, phi_idx] = cartesian_coordinates[1]
 
@@ -395,7 +394,7 @@ class EllipticalCylindricalModel(MFRBaseModel):
         r: np.ndarray = self.R * np.ones(num_points + 1)
         z: np.ndarray = np.zeros(num_points + 1)
 
-        return self.convert_elliptical_to_cartesian_cordinates(r=r, phi=phi_range, z=z)
+        return self.convert_elliptical_to_cartesian_coordinates(r=r, phi=phi_range, z=z)
 
     def get_ellipse_filling(self, r_num_points: int = 51, phi_num_points: int = 51) -> tuple[np.ndarray, np.ndarray]:
         # Create the radial range, without including r = 0.
