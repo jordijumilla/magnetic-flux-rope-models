@@ -1,23 +1,35 @@
-from MagneticFluxRopeModels.ECModel import ECModel
+import pytest
+import itertools
 import numpy as np
 import math
+from magnetic_flux_rope_models.EllipticalCylindricalModel import EllipticalCylindricalModel
 
 
-def test_identity() -> None:
-    for delta in np.linspace(0.1, 1.0, 10, endpoint=True):
-        for psi in np.linspace(0, math.pi, 10, endpoint=False):
-            model = ECModel(delta=delta, psi=psi)
-            x = 0.0
-            y = 0.05
-            z = 0.0
+# Define parameter grids
+R_range = np.linspace(0.1, 1.0, 10, endpoint=True)
+delta_range = np.linspace(0.1, 1.0, 10, endpoint=True)
+psi_range = np.deg2rad([0, 22.5, 45, 67.5, 90, 112.5, 135, 157.5])
 
-            ellip = model.convert_cartesian_to_elliptical_coordinates(x, y, z)
-            cart = model.convert_elliptical_to_cartesian_cordinates(ellip[0], ellip[1], ellip[2])
+# Generate all combinations
+all_param_combinations: list = list(itertools.product(R_range, delta_range, psi_range))
 
-            assert np.allclose([x, y, z], cart, atol=1e-8)
+# Define the test tolerance
+test_tolerance: float = 1e-8
 
+@pytest.mark.parametrize("R, delta, psi", all_param_combinations)
+def test_identity(R: float, delta: float, psi: float) -> None:
+    model = EllipticalCylindricalModel(R=R, delta=delta, psi=psi)
+    x = 0.0
+    y = model.R
+    z = 0.0
 
-def get_quadrant_point(delta: float, psi: float, R: float, quadrant: int) -> tuple[float, float]:
+    elliptical_coordinates = model.convert_cartesian_to_elliptical_coordinates(x, y, z)
+    cartesian_coordinates = model.convert_elliptical_to_cartesian_coordinates(elliptical_coordinates[0], elliptical_coordinates[1], elliptical_coordinates[2])
+
+    assert np.allclose([x, y, z], cartesian_coordinates, atol=test_tolerance)
+
+def get_quadrant_point(R: float, delta: float, psi: float, quadrant: int) -> tuple[float, float]:
+    """Get a point in the specified quadrant of the elliptical elliptical-cylindrical coordinates."""
     if quadrant == 1:
         x = R*delta*math.cos(psi)
         y = R*delta*math.sin(psi)
@@ -31,49 +43,53 @@ def get_quadrant_point(delta: float, psi: float, R: float, quadrant: int) -> tup
         x = R*math.sin(psi)
         y = -R*math.cos(psi)
     else:
-        raise ValueError("Invalid quadrant")
+        raise ValueError(f"Invalid quadrant: {quadrant}")
 
     return x, y
 
+@pytest.mark.parametrize("R, delta, psi", all_param_combinations)
+def test_quadrants(R: float, delta: float, psi: float) -> None:
+    # Create an instance of the model with the given delta, psi and R.
+    model = EllipticalCylindricalModel(delta=delta, psi=psi, R=R)
 
-def test_quadrants() -> None:
-    for R in np.linspace(0.1, 1.0, 10, endpoint=True):
-        for psi in np.linspace(0, math.pi, 10, endpoint=False):
-            for delta in np.linspace(0.1, 1.0, 10, endpoint=True):
-                model = ECModel(delta=delta, psi=psi, R=R)
-                for quadrant, expected_phi in zip([1, 2, 3, 4], [0, math.pi/2, math.pi, -math.pi/2]):
-                    x, y = get_quadrant_point(delta, psi, R, quadrant)
+    # Test each quadrant.
+    for quadrant, expected_phi in zip([1, 2, 3, 4], [0, math.pi/2, math.pi, -math.pi/2]):
+        x, y = get_quadrant_point(R=R, delta=delta, psi=psi, quadrant=quadrant)
 
-                    ellip = model.convert_cartesian_to_elliptical_coordinates(x, y, 0.0)
-                    r = ellip[0]
-                    phi = ellip[1]
-                    z_ellip = ellip[2]
+        ellip = model.convert_cartesian_to_elliptical_coordinates(x, y, 0.0)
+        r = ellip[0]
+        phi = ellip[1]
+        z_ellip = ellip[2]
 
-                    # The radial coordinate should be equal to R.
-                    assert np.isclose(R, r, atol=1e-8)
+        # The radial coordinate should be equal to R.
+        assert np.isclose(R, r, atol=test_tolerance)
 
-                    # The azimuthal coordinate should be equal to the expected value.
-                    # For the third quadrant, the azimuthal coordinate can be either 180 degrees or -180 degrees.
-                    if quadrant == 3:
-                        assert np.isclose(expected_phi, phi, atol=1e-8) or np.isclose(-expected_phi, phi, atol=1e-8)
-                    else:
-                        assert np.isclose(expected_phi, phi, atol=1e-8)
-                    assert np.isclose(0, z_ellip, atol=1e-8)
+        # The azimuthal coordinate should be equal to the expected value.
+        # For the third quadrant, the azimuthal coordinate can be either 180 degrees or -180 degrees.
+        if quadrant == 3:
+            assert np.isclose(expected_phi, phi, atol=test_tolerance) or np.isclose(-expected_phi, phi, atol=test_tolerance)
+        else:
+            assert np.isclose(expected_phi, phi, atol=test_tolerance)
+        assert np.isclose(0, z_ellip, atol=test_tolerance)
 
+@pytest.mark.parametrize("R, delta, psi", all_param_combinations)
+def test_elliptical_to_cartesian(R: float, delta: float, psi: float) -> None:
+    # Create an instance of the model with the given delta, psi and R.
+    model = EllipticalCylindricalModel(delta=delta, psi=psi, R=R)
 
-def test_z_unchanged() -> None:
-    pass
-
-
-def test_elliptical_to_cartesian() -> None:
-    for R in np.linspace(0.1, 1.0, 10, endpoint=True):
-        for psi in np.linspace(0, math.pi, 10, endpoint=False):
-            for delta in np.linspace(0.1, 1.0, 10, endpoint=True):
-                # Create an instance of the model with the given delta, psi and R.
-                model = ECModel(delta=delta, psi=psi, R=R)
-
-                p_cartesian = model.convert_elliptical_to_cartesian_cordinates(R, 0, 0)
-                assert np.allclose(p_cartesian, np.array([R*delta*math.cos(psi), R*delta*math.sin(psi), 0]), atol=1e-8)
+    # The z-value should not change.
+    for z in [-1, 0, 1]:
+        for quadrant, phi in zip([1, 2, 3, 4], [0, math.pi/2, math.pi, 3*math.pi/2]):
+            # Convert the elliptical coordinates to cartesian coordinates.
+            p_cartesian = model.convert_elliptical_to_cartesian_coordinates(r=R, phi=phi, z=z)
+            
+            # The expected cartesian coordinates for the point (R, 0, 0) in elliptical coordinates.
+            expected_coordinates = get_quadrant_point(R=R, delta=delta, psi=psi, quadrant=quadrant)
+            
+            # Check that the cartesian coordinates are close to the expected coordinates.
+            assert np.isclose(p_cartesian[0], expected_coordinates[0], atol=test_tolerance)
+            assert np.isclose(p_cartesian[1], expected_coordinates[1], atol=test_tolerance)
+            assert np.isclose(p_cartesian[2], z, atol=test_tolerance)
 
 
 def test_elliptical_to_cartesian_vector() -> None:
