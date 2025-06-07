@@ -16,12 +16,12 @@ class EllipticalCylindricalModel(MFRBaseModel):
     def __init__(self, delta: float, R: float, psi: float) -> None:
         super().__init__()
 
-        # Geometrical.
+        # Geometrical parameters.
         self.R: float = R
         self.delta: float = delta
         self.psi: float = psi
 
-        # Validate these parameters
+        # Validate the provided parameters.
         self._validate_elliptical_cylindrical_parameters()
 
         # Calculate the derived geometrical magnitudes.
@@ -31,21 +31,18 @@ class EllipticalCylindricalModel(MFRBaseModel):
         # Parameter: delta.
         if not isinstance(self.delta, (int, float)):
             raise TypeError("Parameter: delta must be an integer or float.")
-
         if not (0 < self.delta <= 1):
             raise ValueError("Parameter: delta must be in (0,1].")
         
         # Parameter: R.
         if not isinstance(self.R, (int, float)):
             raise TypeError("Parameter: R must be an integer or float.")
-        
         if not (self.R > 0):
             raise ValueError("Parameter: R must be > 0.")
 
         # Parameter: psi.
         if not isinstance(self.psi, (int, float)):
             raise TypeError("Parameter: psi must be an integer or float.")
-
         if not (0 <= self.psi < math.pi):
             raise ValueError("Parameter: psi must be in [0, pi).")
 
@@ -77,6 +74,7 @@ class EllipticalCylindricalModel(MFRBaseModel):
         they are not orthogonal between them. {epsilon_r, epsilon_phi} are non-unit, whereas epsilon_z has magnitude 1."""
 
         if isinstance(r, (int, float)) and isinstance(phi, (int, float)):
+            # Scalar case.
             epsilon_r: np.ndarray = [self.delta * math.cos(phi), math.sin(phi), 0]
 
             # This vector should be scaled by r, but because we are normalising it later, we avoid the multiplication by r.
@@ -87,10 +85,11 @@ class EllipticalCylindricalModel(MFRBaseModel):
             epsilon_r /= np.linalg.norm(epsilon_r)
             epsilon_phi /= np.linalg.norm(epsilon_phi)
 
-            basis = np.stack([epsilon_r, epsilon_phi, epsilon_z]).T
+            basis: np.ndarray = np.stack([epsilon_r, epsilon_phi, epsilon_z]).T
             return self.psi_rotation_matrix @ basis
         
         else:
+            # Vector case.
             epsilon_r: np.ndarray = np.vstack([self.delta * np.cos(phi), np.sin(phi), np.zeros_like(r)]).T
 
             # This vector should be scaled by r, but because we are normalising it later, we avoid the multiplication by r.
@@ -101,25 +100,50 @@ class EllipticalCylindricalModel(MFRBaseModel):
             epsilon_r /= np.linalg.norm(epsilon_r, axis=1, keepdims=True)
             epsilon_phi /= np.linalg.norm(epsilon_phi, axis=1, keepdims=True)
 
-            basis = np.stack([epsilon_r, epsilon_phi, epsilon_z], axis=-1)
+            basis: np.ndarray = np.stack([epsilon_r, epsilon_phi, epsilon_z], axis=-1)
             return np.matmul(self.psi_rotation_matrix, basis)
 
     def convert_elliptical_to_cartesian_vector(self, v_r: float, v_phi: float, v_z: float, r: float, phi: float) -> np.ndarray:
         # Because the change of basis is not constant, we have to get the basis change matrix at this (r, phi) coordinate.
         elliptical_to_cartesian_basis_change_matrix: np.ndarray = self.get_elliptical_unit_basis(r=r, phi=phi)
         if isinstance(v_r, float) and isinstance(v_phi, float) and isinstance(v_z, float):
+            # Scalar case.
             return np.array([v_r, v_phi, v_z]) @ elliptical_to_cartesian_basis_change_matrix.T
         else:
+            # Vector case: leverage numpy's vectorisation for performance.
             vector_array = np.array([v_r, v_phi, v_z]).T
             return np.einsum('ijk,ik->ij', elliptical_to_cartesian_basis_change_matrix, vector_array)
 
-    def get_elliptical_basis_metric(self, r: float, phi: float) -> None:
-        elliptical_basis = self.get_elliptical_unit_basis(r, phi)
+    def get_elliptical_basis_metric(self, r: float, phi: float) -> np.ndarray:
+        """Calculate the elliptical basis metric, which is the inner product of the elliptical basis vectors.
+        This is a 3x3 matrix, where the (i,j) element is the inner product of the i-th and j-th elliptical basis vectors.
+        The diagonal elements are the magnitudes of the elliptical basis vectors squared, and the off-diagonal elements are the inner products between the elliptical basis vectors.
+        
+        Args:
+            r (float): Radial coordinate.
+            phi (float): Azimuthal coordinate.
+
+            Returns:
+            np.ndarray: The elliptical basis metric, a 3x3 matrix.
+        """
+        elliptical_basis: np.ndarray = self.get_elliptical_unit_basis(r, phi)
         elliptical_basis_metric = elliptical_basis.T @ elliptical_basis
         return elliptical_basis_metric
 
     def evaluate_ellipse_equation(self, x: float, y: float, z: float) -> float:
-        return (self.delta * x) ** 2 + y**2 - self.R**2
+        """Evaluate the equation of the ellipse in Cartesian coordinates.
+        The equation of the ellipse is given by: (delta * x)^2 + y^2 = R^2
+        where delta is the ratio between the semi-major and semi-minor axes of the ellipse, and R is the semi-major axis.
+        Args:
+            x (float): x-coordinate.
+            y (float): y-coordinate.
+            z (float): z-coordinate (not used in the evaluation).
+        Returns:
+            float: The value of the ellipse equation at the given coordinates.
+        """
+        # TODO: We need to account for psi and R as well. Because this is not used at the moment, we can ignore it.
+        raise NotImplementedError()
+        # return (self.delta * x) ** 2 + y**2 - self.R**2
 
     def convert_elliptical_to_cartesian_coordinates(
         self, r: float | np.ndarray, phi: float | np.ndarray, z: float | np.ndarray
@@ -172,7 +196,7 @@ class EllipticalCylindricalModel(MFRBaseModel):
         return np.sqrt(np.sum(np.square(elliptical_basis), axis=0))
     
     def get_h(self, phi: float) -> float:
-        """Calculate the "h" factor, defined so that (h_phi)^2 = r^2 * h^2 (eq. 5 in the paper).
+        """Calculate the "h" factor, defined so that (h_phi)^2 = r^2 * h^2 (eq. 5 in the 2018 EC Model article).
         Note that h is not constant, but a function of phi. Also note that h is never zero."""
         sin_phi: float = math.sin(phi)
         cos_phi: float = math.cos(phi)
@@ -182,6 +206,7 @@ class EllipticalCylindricalModel(MFRBaseModel):
         if phi is None and h is None:
             raise ValueError("Parameters 'phi' and 'h' cannot be both None.")
         
+        # We could recompute "h" here, but if "h" is already provided, we can use it directly to avoid unnecessary calculations.
         if h is None:
             h: float = self.get_h(phi)
 
@@ -306,7 +331,7 @@ class EllipticalCylindricalModel(MFRBaseModel):
             tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]: values for the sweep of r, phi, B and J.
         """
         # Sample the inside of the magnetic flux rope, in uniform steps in r and phi.
-        r_range, phi_range = self.get_ellipse_filling(r_num_points, phi_num_points)
+        r_range, phi_range = self._get_ellipse_filling(r_num_points, phi_num_points)
 
         # Initialise variables
         x = np.zeros((r_num_points, phi_num_points))
@@ -396,7 +421,7 @@ class EllipticalCylindricalModel(MFRBaseModel):
 
         return self.convert_elliptical_to_cartesian_coordinates(r=r, phi=phi_range, z=z)
 
-    def get_ellipse_filling(self, r_num_points: int = 51, phi_num_points: int = 51) -> tuple[np.ndarray, np.ndarray]:
+    def _get_ellipse_filling(self, r_num_points: int = 51, phi_num_points: int = 51) -> tuple[np.ndarray, np.ndarray]:
         # Create the radial range, without including r = 0.
         r_range: np.ndarray = np.linspace(start=0, stop=self.R, num=r_num_points + 1, endpoint=True)
         r_range = r_range[1:]
@@ -406,12 +431,12 @@ class EllipticalCylindricalModel(MFRBaseModel):
 
         return r_range, phi_range
 
-    def plot_boundary(
+    def plot_mfr_boundary(
         self, boundary: np.ndarray | None = None,
         vector_dict: dict[str, tuple[np.ndarray, np.ndarray]] | None = None,
         normalise_radial_coordinate: bool = False,
         fig_size: tuple[float, float] | None = None,
-        axis = None
+        axis: plt.Axes | None = None
     ) -> None:
         if boundary is None:
             boundary = self.get_boundary()
@@ -425,6 +450,8 @@ class EllipticalCylindricalModel(MFRBaseModel):
             fig, ax = plt.subplots(tight_layout=True, figsize=fig_size)
         else:
             ax = axis
+        
+        # Plot the boundary of the MFR.
         ax.plot(boundary[:, 0] * scale_factor, boundary[:, 1] * scale_factor, c="b", label="MFR boundary")
 
         for vector_origin, vector_end in vector_dict.values():
@@ -449,24 +476,41 @@ class EllipticalCylindricalModel(MFRBaseModel):
             ax.set_xlabel("x/R")
             ax.set_ylabel("y/R")
         else:
-            ax.set_xlabel("x [AU]")
-            ax.set_ylabel("y [AU]")
+            ax.set_xlabel("x (AU)")
+            ax.set_ylabel("y (AU)")
         
         ax.set_title("Magnetic flux rope boundary")
         if axis is None:
             plt.show()
     
     def plot_crossing_trajectory(self, df: pd.DataFrame) -> None:
+        """
+        Plot the trajectory of a spacecraft crossing the magnetic flux rope in both the x-y and x-z planes.
+
+        Args:
+            df (pd.DataFrame): DataFrame containing the trajectory data. Must have columns "x", "y", and "z".
+
+        Returns:
+            None
+
+        The method creates a figure with two subplots:
+            - Left: The x-y projection of the trajectory, including the MFR boundary, entry, and exit points.
+            - Right: The x-z projection (lateral view), including entry and exit points.
+
+        Entry and exit points are marked, and the MFR boundary is shown for context.
+        """
         N: int = len(df)
 
         fig, ax = plt.subplots(1, 2, figsize=(14, 7), tight_layout=True)
-        self.plot_boundary(axis=ax[0])
+        # Plot the MFR boundary and the trajectory in the x-y plane
+        self.plot_mfr_boundary(axis=ax[0])
         ax[0].plot(df["x"], df["y"], c="r", label="Trajectory $x-y$")
         ax[0].scatter(0, df["y"][0], c="r")
         ax[0].scatter(df["x"][0], df["y"][0], c="k", marker="x", label="Entry point")
         ax[0].scatter(df["x"][N - 1], df["y"][N - 1], c="m", marker="x", label="Exit point")
         ax[0].legend()
 
+        # Plot the trajectory in the x-z plane (lateral view)
         ax[1].plot(df["x"], df["z"], c="r", label="Trajectory $x-z$")
         ax[1].axvline(df["x"][0], c="b")
         ax[1].axvline(np.max(df["x"]), c="b")

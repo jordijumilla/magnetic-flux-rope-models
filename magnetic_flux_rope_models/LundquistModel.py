@@ -152,16 +152,3 @@ class LundquistModel(EllipticalCylindricalModel):
             return np.zeros((length, 3))
         
         raise ValueError(f"Invalid input types or shapes of r ({type(r)}) and phi ({type(phi)}).")
-
-
-def main() -> None:
-    my_lundquist_model = LundquistModel()
-    my_lundquist_model.plot_boundary()
-    my_lundquist_model.radial_coordinate_sweep(plot=True)
-    my_lundquist_model.radial_and_angular_sweep(plot=True)
-    df = my_lundquist_model.simulate_crossing(y_0=0.0, v_sc=450)
-    my_lundquist_model.plot_vs_time(df, ["B_x", "B_y", "B_z", "B"], colour=["r", "g", "b", "k"], time_units="h")
-
-
-if __name__ == "__main__":
-    main()
