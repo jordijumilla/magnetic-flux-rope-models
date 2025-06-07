@@ -7,7 +7,6 @@ import time
 import matplotlib.pyplot as plt
 import matplotlib
 from matplotlib.figure import Figure
-from typing import Self
 from scipy.optimize import fmin_l_bfgs_b
 
 from magnetic_flux_rope_models.RandomNoise import RandomNoise, UniformNoise, GaussianNoise
@@ -129,11 +128,11 @@ class MFRBaseModel():
         return on_move
 
     @staticmethod
-    def evaluate_model_and_crossing(model_class: Self,
+    def evaluate_model_and_crossing(model_class,
                                     df_observations: pd.DataFrame,
                                     residue_method: str,
                                     model_parameters: dict[str, float]  | None = None,
-                                    crossing_parameters: dict[str, float] | None = None) -> tuple[float | None, Self | None]:
+                                    crossing_parameters: dict[str, float] | None = None) -> tuple[float | None, None]:
         if model_parameters is None:
             model_parameters = dict()
         
@@ -141,7 +140,7 @@ class MFRBaseModel():
             crossing_parameters = dict()
 
         # Instantiate the EC Model with the given parameters.
-        mfr_model: Self = model_class(**model_parameters)
+        mfr_model = model_class(**model_parameters)
 
         # Use the same number of points for the fitting as the incoming observations.
         crossing_parameters["time_stencil"] = df_observations["time"].to_numpy()
@@ -179,7 +178,7 @@ class MFRBaseModel():
         return residue, mfr_model
     
     @staticmethod
-    def fit(model_class: Self,
+    def fit(model_class,
             df_observations: pd.DataFrame,
             model_parameters: dict[str, float],
             crossing_parameters: dict[str, float],

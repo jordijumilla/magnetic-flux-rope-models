@@ -72,7 +72,7 @@ def test_quadrants(R: float, delta: float, psi: float) -> None:
     model = EllipticalCylindricalModel(delta=delta, psi=psi, R=R)
 
     # Test each quadrant.
-    for quadrant, expected_phi in zip([1, 2, 3, 4], [0, math.pi/2, math.pi, 3*math.pi/2]):
+    for quadrant, expected_phi in zip([1, 2, 3, 4], [0, math.pi/2, math.pi, -math.pi/2]):
         x, y = get_quadrant_point(R=R, delta=delta, psi=psi, quadrant=quadrant)
 
         ellip = model.convert_cartesian_to_elliptical_coordinates(x=x, y=y, z=0.0)
