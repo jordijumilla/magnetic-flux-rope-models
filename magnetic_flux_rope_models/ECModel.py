@@ -162,7 +162,7 @@ class ECModel(EllipticalCylindricalModel):
         B_phi: float = (
             -self.handedness
             * self.mu_0
-            * self.get_h(phi + self.psi)
+            * self.get_h(phi)
             * self.delta
             * self.beta_m
             * math.pow(r  * self.AU_to_m, self.m + 1)
@@ -184,8 +184,8 @@ class ECModel(EllipticalCylindricalModel):
         J_r: float = 0
 
         # Pre-compute h and chi factors.
-        h: float = self.get_h(phi=phi + self.psi)
-        chi: float = self.get_chi(phi=phi + self.psi)
+        h: float = self.get_h(phi=phi)
+        chi: float = self.get_chi(phi=phi)
 
         # Compute the poloidal and axial components of the current density, as per equation 30 from the paper.
         J_phi: float = h * self.alpha_n * math.pow(r * self.AU_to_m, self.n)
