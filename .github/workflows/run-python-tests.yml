@@ -32,7 +32,7 @@ jobs:
 
     - name: Run tests with coverage
       run: |
-        pytest test --cov=magnetic-flux-rope-models --cov-report=term --cov-report=xml
+        pytest test --cov=magnetic_flux_rope_models --cov-report=term --cov-report=xml
 
     - name: Upload coverage to GitHub summary
       if: always()
