@@ -1,7 +1,5 @@
 -r requirements.txt
 
-jupyter
-
 pytest
 coverage
 pytest-benchmark
@@ -15,11 +13,10 @@ pre-commit
 
 requests_mock
 
-sphinx
-pydata-sphinx-theme
-sphinx-autobuild
-autodoc
-sphinxcontrib-napoleon
+mkdocs-material
+pymdown-extensions
+mkdocs-include-markdown
+mkdocstrings[python]
 
 build
 hatchling

@@ -2,5 +2,7 @@ pandas
 numpy
 scipy
 scikit-learn
+
+# Visualisation
 matplotlib
 seaborn
