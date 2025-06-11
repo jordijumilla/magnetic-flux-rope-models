@@ -1,0 +1,71 @@
+site_name: Magnetic Flux Rope Models
+repo_url: https://github.com/jordi-jumilla-lorenz/magnetic-flux-rope-models
+repo_name: Go to the repository
+site_description: A Python package for simulating and analyzing magnetic flux ropes in astrophysical contexts.
+site_author: Jordi Jumilla Lorenz
+
+theme:
+  name: material
+  custom_dir: docs/overrides
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - content.code.annotate
+  palette:
+    - scheme: default
+      primary: blue
+      accent: teal
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - scheme: slate
+      primary: blue
+      accent: teal
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  font:
+    text: "Roboto, sans-serif"
+    code: "Fira Mono, monospace"
+  logo: images/logo.png
+  favicon: images/logo.png
+
+nav:
+  - Home: index.md
+  - Getting Started:
+      - Installation: installation.md
+      - Usage: usage.md
+  - API Reference: api.md
+  - About: about.md
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: ["."]
+          options:
+            show_source: true
+            extra:
+              source:
+                repo_url: https://github.com/jordi-jumilla-lorenz/magnetic-flux-rope-models
+                branch: master
+                path_template: "{filepath}#L{lineno}"
+
+markdown_extensions:
+  - admonition
+  - pymdownx.arithmatex:
+      inline_syntax: ['$', '$']
+      generic: true
+
+extra_javascript:
+  - https://polyfill.io/v3/polyfill.min.js?features=es6
+  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
+
+nav:
+  - Home: index.md
+  - Getting Started: documentation.md
+  - API Reference: api.md
+
