@@ -15,7 +15,7 @@ class ECModel(EllipticalCylindricalModel):
     def __init__(
         self,
         delta: float,
-        psi: float,
+        xi: float,
         R: float = 0.05,
         n: int = 1,
         m: int = 0,
@@ -29,7 +29,7 @@ class ECModel(EllipticalCylindricalModel):
 
         Args:
             delta (float): Ellipticity of the flux rope. Ratio between the lengths of the minor and major axes of the elliptical cross section. Valid range: (0, 1].
-            psi (float): Angle of rotation about the central axis of the flux rope, in radians. Valid range: [0, π].
+            xi (float): Angle of rotation about the central axis of the flux rope, in radians. Valid range: [0, π].
             R (float, optional): Radius of the semi-major axis in Astronomical Units (AU). Default is 0.05.
             n (int, optional): Model parameter n. Default is 1.
             m (int, optional): Model parameter m. Default is 0.
@@ -39,7 +39,7 @@ class ECModel(EllipticalCylindricalModel):
             handedness (int, optional): Handedness of the flux rope. Must be -1 or 1. Default is 1.
         """
         # Initialise the EllipticalCylindricalModel superclass.
-        super().__init__(delta=delta, R=R, psi=psi)
+        super().__init__(delta=delta, R=R, xi=xi)
 
         # EC Model field parameters.
         self.n: int = n
@@ -110,7 +110,7 @@ class ECModel(EllipticalCylindricalModel):
         return f"""ECModel with parameters:
         - Geometrical:
             - delta = {self.delta:.3f}
-            - psi = {math.degrees(self.psi):.3f} deg
+            - xi = {math.degrees(self.xi):.3f} deg
             - R = {self.R:.3f} AU
         - Field:
             - n = {self.n}

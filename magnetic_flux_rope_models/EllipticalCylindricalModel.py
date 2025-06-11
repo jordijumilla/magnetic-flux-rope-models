@@ -55,13 +55,13 @@ class EllipticalCylindricalModel(MFRBaseModel):
         self.delta_squared = self.delta * self.delta
 
         # Psi-related magnitudes:
-        self.sin_psi: float = math.sin(self.xi)
-        self.cos_psi: float = math.cos(self.xi)
-        self.psi_rotation_matrix: np.ndarray = np.array([[self.cos_psi, -self.sin_psi, 0],
-                                                         [self.sin_psi, self.cos_psi,  0],
+        self.sin_xi: float = math.sin(self.xi)
+        self.cos_xi: float = math.cos(self.xi)
+        self.xi_rotation_matrix: np.ndarray = np.array([[self.cos_xi, -self.sin_xi, 0],
+                                                         [self.sin_xi, self.cos_xi,  0],
                                                          [0,            0,             1]])
-        self.psi_rotation_matrix_inverse: np.ndarray = np.array([[self.cos_psi, self.sin_psi, 0],
-                                                                [-self.sin_psi, self.cos_psi,  0],
+        self.xi_rotation_matrix_inverse: np.ndarray = np.array([[self.cos_xi, self.sin_xi, 0],
+                                                                [-self.sin_xi, self.cos_xi,  0],
                                                                 [0,            0,             1]])
 
     def get_area(self) -> float:
@@ -89,7 +89,7 @@ class EllipticalCylindricalModel(MFRBaseModel):
                 epsilon_phi /= np.linalg.norm(epsilon_phi)
 
             basis: np.ndarray = np.stack([epsilon_r, epsilon_phi, epsilon_z]).T
-            return self.psi_rotation_matrix @ basis
+            return self.xi_rotation_matrix @ basis
         
         else:
             # Vector case.
@@ -105,7 +105,7 @@ class EllipticalCylindricalModel(MFRBaseModel):
                 epsilon_phi /= np.linalg.norm(epsilon_phi, axis=1, keepdims=True)
 
             basis: np.ndarray = np.stack([epsilon_r, epsilon_phi, epsilon_z], axis=-1)
-            return np.matmul(self.psi_rotation_matrix, basis)
+            return np.matmul(self.xi_rotation_matrix, basis)
 
     def convert_elliptical_to_cartesian_vector(self, v_r: float, v_phi: float, v_z: float, r: float, phi: float) -> np.ndarray:
         # Because the change of basis is not constant, we have to get the basis change matrix at this (r, phi) coordinate.
@@ -165,7 +165,7 @@ class EllipticalCylindricalModel(MFRBaseModel):
         """
         x = self.delta * r * np.cos(phi)
         y = r * np.sin(phi)
-        return (self.psi_rotation_matrix @ np.array([x, y, z])).T
+        return (self.xi_rotation_matrix @ np.array([x, y, z])).T
 
     def convert_cartesian_to_elliptical_coordinates(self, x: float | np.ndarray, y: float | np.ndarray, z: float | np.ndarray) -> np.ndarray:
         """Convert Cartesian coordinates (x, y, z) to elliptical coordinates (r, phi, z), using the delta parameter.
@@ -180,7 +180,7 @@ class EllipticalCylindricalModel(MFRBaseModel):
             np.ndarray: array containing the corresponding elliptical coordinates [r, phi, z].
         """
         # Rotate the Cartesian coordinates by -xi.
-        xyz_rot = self.psi_rotation_matrix_inverse @ np.array([x, y, z])
+        xyz_rot = self.xi_rotation_matrix_inverse @ np.array([x, y, z])
         x_rot = xyz_rot[0]
         y_rot = xyz_rot[1]
         z = xyz_rot[2]
@@ -557,16 +557,16 @@ class EllipticalCylindricalModel(MFRBaseModel):
     def find_intersection_points_rot(self, y_0: float, theta: float) -> tuple[np.ndarray | None, np.ndarray | None]:
         # The trajectory will pass through [0, y_0, 0].
         # Compute the intersection of the elliptical cylinder with the line of equation (x, y, z) = (0, y_0, 0) + (cos(\theta), 0, \sin(theta))*\lambda
-        cos_psi = math.cos(self.xi)
-        cos_psi_2 = cos_psi * cos_psi
-        sin_psi = math.sin(self.xi)
-        sin_psi_2 = sin_psi * sin_psi
+        cos_xi = math.cos(self.xi)
+        cos_xi_2 = cos_xi * cos_xi
+        sin_xi = math.sin(self.xi)
+        sin_xi_2 = sin_xi * sin_xi
         R_2 = self.R * self.R
         delta_2 = self.delta * self.delta
 
-        A = (cos_psi_2 / (delta_2 * R_2)) + (sin_psi_2 / R_2)
-        B = -cos_psi * sin_psi * (1 - 1/delta_2) / R_2
-        C = (sin_psi_2 / (delta_2 * R_2)) + (cos_psi_2 / R_2)
+        A = (cos_xi_2 / (delta_2 * R_2)) + (sin_xi_2 / R_2)
+        B = -cos_xi * sin_xi * (1 - 1/delta_2) / R_2
+        C = (sin_xi_2 / (delta_2 * R_2)) + (cos_xi_2 / R_2)
 
         # Quadratic equation.
         cos_theta = math.cos(theta)
