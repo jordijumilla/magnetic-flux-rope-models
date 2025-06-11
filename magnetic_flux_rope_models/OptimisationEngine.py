@@ -58,7 +58,6 @@ class OptimisationParameter:
 
 class OptimisationEngine:
     def __init__(self, optimisation_parameters: dict[str, dict[str, str | float]], model = None):
-        #self.model = model
         self.optimisation_parameters: list[OptimisationParameter] = [OptimisationParameter(name=op_name, options=op_options) for op_name, op_options in optimisation_parameters.items()]
 
     

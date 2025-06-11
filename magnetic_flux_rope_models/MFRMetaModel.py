@@ -106,9 +106,9 @@ def sweep_2d(x1: ParameterRange, x2: ParameterRange, x_fixed: dict[str, float], 
     target_name = model_result["target_name"]
 
     # Predict over a grid
-    n = 31
-    y_0_range = np.linspace(0, 0.8, n)
-    tau_range = np.linspace(0.5, 2, n)
+    n: int = 31
+    y_0_range: np.typing.NDArray[np.float64] = np.linspace(0, 0.8, n)
+    tau_range: np.typing.NDArray[np.float64] = np.linspace(0.5, 2, n)
     a_grid, b_grid = np.meshgrid(y_0_range, tau_range)
     X_grid_raw = np.column_stack((a_grid.ravel(), b_grid.ravel()))
     X_grid_raw = pd.DataFrame(X_grid_raw, columns=[x1.name, x2.name])
@@ -506,6 +506,12 @@ def get_models_stats(models: dict) -> pd.DataFrame:
     return pd.DataFrame(stats_general, index=["RMSE Train", "RMSE Test", "R^2 Train", "R^2 Test"])
 
 def plot_residuals(models: dict, method: str, save_file_path: str | None = None) -> None:
+    """Plot the residuals of the models in a histogram or Q-Q plot.
+    Args:
+        models (dict): A dictionary of models, where each key is a parameter name and the value is a dictionary containing the model results.
+        method (str): The method to use for plotting the residuals. Can be "histogram" or "Q-Q".
+        save_file_path (str, optional): The file path to save the plot. If None, the plot will not be saved.
+    """
     n_cols = 2
     n_rows = math.ceil(len(models) / n_cols)
     fig, axis = plt.subplots(n_rows, n_cols, figsize=(12, 12), tight_layout=True)

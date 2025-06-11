@@ -155,16 +155,15 @@ class MFRBaseModel():
             # There is no intersection.
             return 1e9, None
 
-        if residue_method in ["MSE", "RMSE"]:
-            residue = ((df_observations[["B_x", "B_y", "B_z"]] - df_test[["B_x", "B_y", "B_z"]])**2).to_numpy().sum()
-        
-            if residue_method == "RMSE":
-                residue = math.sqrt(residue / len(df_observations))
+        if residue_method in ["SSE", "MSE", "RMSE"]:
+            sse = ((df_observations[["B_x", "B_y", "B_z"]] - df_test[["B_x", "B_y", "B_z"]])**2).to_numpy().sum()
+
+            if residue_method == "SSE":
+                residue = sse
             elif residue_method == "MSE":
-                residue /= len(df_observations)
-        
-        elif residue_method == "SSE":
-            residue = ((df_observations[["B_x", "B_y", "B_z"]] - df_test[["B_x", "B_y", "B_z"]])**2).to_numpy().sum()
+                residue = sse / len(df_observations)
+            elif residue_method == "RMSE":
+                residue = math.sqrt(sse / len(df_observations))
 
         elif residue_method == "X":
             # Method used by Nieves-Chinchilla et al. (2017) in "Elliptic-cylindrical Analytical Flux Rope Model for Magnetic Clouds"
@@ -174,6 +173,8 @@ class MFRBaseModel():
             residue /= np.max(B_tot_observations)**2
             residue = math.sqrt(residue)
             residue /= len(df_observations)
+        else:
+            raise ValueError(f"Unrecognised residue method: {residue_method}.")
 
         return residue, mfr_model
     
@@ -359,6 +360,7 @@ class MFRBaseModel():
         Args:
             df_to_fit (pd.DataFrame): The observed data.
             df_fitted (pd.DataFrame): The fitted data.
+            save_filename (str | None): The filename to save the plot to. If None, the plot will be shown instead.
         """
         _, ax = plt.subplots(figsize=(10, 6))
         self.plot_vs_time(df_to_fit, ["B_x", "B_y", "B_z", "B"], colour=["r", "g", "b", "k"], time_units="h", alpha=0.8, ax=ax)
@@ -385,17 +387,39 @@ class MFRBaseModel():
         return file_path
 
     def save(self, file_path: str) -> None:
-        """Save the MFR model in pickle format."""
+        """Save the MFR model in pickle format.
+        
+        Args:
+            file_path (str): The path to the file where the model will be saved.
+        """
+        if not isinstance(file_path, str) or file_path == "":
+            raise ValueError("The file path must be a non-empty string.")
+
         file_path_pickle: str = self._add_pickle_extension(file_path)
         
         with open(file_path_pickle, "wb") as f:
             pickle.dump(self, f)
 
     @staticmethod
-    def load(cls, file_path: str):
-        """Load a MFR model in pickle format."""
-        file_path_pickle: str = cls._add_pickle_extension(file_path)
+    def load(file_path: str):
+        """Load a MFR model in pickle format.
+        
+        Args:
+            file_path (str): The path to the file where the model is saved.
 
+        Returns:
+            MFRBaseModel (MFRBaseModel): The loaded model.
+
+        Raises:
+            ValueError: If the file path is not a non-empty string.
+            FileNotFoundError: If the file does not exist.
+        """
+        if not isinstance(file_path, str) or file_path == "":
+            raise ValueError("The file path must be a non-empty string.")
+        # Add the pickle extension if it is not present.
+        file_path_pickle: str = MFRBaseModel._add_pickle_extension(file_path)
+
+        # Load the model from the pickle file.
         with open(file_path_pickle, "rb") as f:
             model = pickle.load(f)
         return model

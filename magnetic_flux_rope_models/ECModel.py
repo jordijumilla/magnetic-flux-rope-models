@@ -8,48 +8,8 @@ from magnetic_flux_rope_models.EllipticalCylindricalModel import EllipticalCylin
 # Add inclination angle in the crossing.
 
 class ECModel(EllipticalCylindricalModel):
-    """
-    The Elliptic-Cylindrical (EC) Magnetic Flux Rope Model.
-
+    """The Elliptic-Cylindrical (EC) Magnetic Flux Rope Model.
     A Python implementation of the model by Teresa Nieves-Chinchilla et al. from https://doi.org/10.3847/1538-4357/aac951
-
-    Parameters
-    ----------
-    All angles are expected in units of degrees.
-
-    delta: float, A measure of the ellipticity of the flux rope.
-           The ratio between the length of the minor and major axes
-           of the elliptical cross section. Valid range (0, 1].
-
-    psi: float, Angle of rotation about the central axis of the flux rope.
-        Valid range [0, 180].
-
-    handedness: int, optional {-1, 1} Handedness of flux rope.
-
-    C_nm: int, optional, default: 1.0
-        Valid only if > 0
-
-    B_z_0: float, optional, default: 10.0 nT
-
-    tau: float, optional, default: 1.3
-
-    R: float, optional, default: 0.05 (diameter = 0.1)
-        Radius of the semi-major axis in Astronomical Units (AU)
-
-    n: int, optional, default: 1
-
-    m: int, optional, default: 0
-
-    epsilon: float > 0, optional, default: 0.05
-        Size of noise modifier. Ignored if noise_type is 'none'.
-
-        For noise_type 'gaussian', epsilon is the standard deviation of the
-        normal distrubution centered on 0. Values in the distribution
-        Normal(mu=0,sigma=epsilon) are added to the magnetic field components.
-
-        For noise_type 'uniform', epsilon defines the +/- bounds of the
-        distribution.  Values in [-epsilon,epsilon] are added to the magnetic
-        field components.
     """
 
     def __init__(
@@ -63,8 +23,21 @@ class ECModel(EllipticalCylindricalModel):
         tau: float = 1.3,
         B_z_0: float = 10.0,
         handedness: int = 1,
-        p_0: float = 0.0
     ) -> None:
+        """
+        Initialise an ECModel instance.
+
+        Args:
+            delta (float): Ellipticity of the flux rope. Ratio between the lengths of the minor and major axes of the elliptical cross section. Valid range: (0, 1].
+            psi (float): Angle of rotation about the central axis of the flux rope, in radians. Valid range: [0, π].
+            R (float, optional): Radius of the semi-major axis in Astronomical Units (AU). Default is 0.05.
+            n (int, optional): Model parameter n. Default is 1.
+            m (int, optional): Model parameter m. Default is 0.
+            C_nm (float, optional): Model parameter C_nm. Must be > 0. Default is 1.0.
+            tau (float, optional): Model parameter tau. Default is 1.3.
+            B_z_0 (float, optional): Central axial magnetic field strength in nT. Default is 10.0.
+            handedness (int, optional): Handedness of the flux rope. Must be -1 or 1. Default is 1.
+        """
         # Initialise the EllipticalCylindricalModel superclass.
         super().__init__(delta=delta, R=R, psi=psi)
 
@@ -75,7 +48,6 @@ class ECModel(EllipticalCylindricalModel):
         self.C_nm: float = C_nm
         self.B_z_0: float = B_z_0
         self.handedness: int = handedness
-        self.p_0: float = p_0
 
         # Validate the incoming user-defined parameters.
         self._validate_parameters()
@@ -132,13 +104,6 @@ class ECModel(EllipticalCylindricalModel):
 
         if self.C_nm <= 0:
             raise ValueError("Parameter: C_nm must be > 0.")
-
-        # Parameter: p_0.
-        if not isinstance(self.p_0, (int, float)):
-            raise TypeError("Parameter: p_0 must be an integer or float.")
-
-        if self.p_0 < 0:
-            raise ValueError("Parameter: p_0 must be >= 0.")
 
     def __repr__(self) -> str:
         """Create nice string to display the parameters of the model to the user in a string format."""
