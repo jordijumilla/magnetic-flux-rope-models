@@ -14,13 +14,13 @@ class EllipticalCylindricalModel(MFRBaseModel):
     """Common interface for ellipical-cylindrical symmetric MFR models. This includes circular-cylindrical models,
     of which the elliptical-cylindrical geometry is a generalisation."""
 
-    def __init__(self, delta: float, R: float, psi: float) -> None:
+    def __init__(self, delta: float, R: float, xi: float) -> None:
         super().__init__()
 
         # Geometrical parameters.
         self.R: float = R
         self.delta: float = delta
-        self.psi: float = psi
+        self.xi: float = xi
 
         # Validate the provided parameters.
         self._validate_elliptical_cylindrical_parameters()
@@ -41,22 +41,22 @@ class EllipticalCylindricalModel(MFRBaseModel):
         if not (self.R > 0):
             raise ValueError("Parameter: R must be > 0.")
 
-        # Parameter: psi.
-        if not isinstance(self.psi, (int, float)):
-            raise TypeError("Parameter: psi must be an integer or float.")
-        if not (0 <= self.psi < math.pi):
-            raise ValueError("Parameter: psi must be in [0, pi).")
+        # Parameter: xi.
+        if not isinstance(self.xi, (int, float)):
+            raise TypeError("Parameter: xi must be an integer or float.")
+        if not (0 <= self.xi < math.pi):
+            raise ValueError("Parameter: xi must be in [0, pi).")
 
     def _calculate_derived_parameters(self):
         """Calculate the derived parameters of the elliptical-cylindrical model.
-        This includes the magnitudes that are derived from the geometrical parameters delta, R and psi.
+        This includes the magnitudes that are derived from the geometrical parameters delta, R and xi.
         """
         # Delta-related magnitudes:
         self.delta_squared = self.delta * self.delta
 
         # Psi-related magnitudes:
-        self.sin_psi: float = math.sin(self.psi)
-        self.cos_psi: float = math.cos(self.psi)
+        self.sin_psi: float = math.sin(self.xi)
+        self.cos_psi: float = math.cos(self.xi)
         self.psi_rotation_matrix: np.ndarray = np.array([[self.cos_psi, -self.sin_psi, 0],
                                                          [self.sin_psi, self.cos_psi,  0],
                                                          [0,            0,             1]])
@@ -69,8 +69,8 @@ class EllipticalCylindricalModel(MFRBaseModel):
 
     def get_elliptical_basis(self, r: float | np.ndarray, phi: float | np.ndarray, unit_basis: bool = False) -> np.ndarray:
         """Calculate the components of the elliptical-cylindrical vector basis $e_r$ and $e_phi$ in Cartesian coordinates, given by the coordinate change:
-            x = delta * r * cos(phi + psi)
-            y = r * sin(phi + psi)
+            x = delta * r * cos(phi + xi)
+            y = r * sin(phi + xi)
             z = z
         By differentating the previous change coordinate change w.r.t. r, phi and z, we can get
         the unit vectors in the elliptical basis. This basis is a non-orthogonal and non-unit vector basis.
@@ -128,7 +128,7 @@ class EllipticalCylindricalModel(MFRBaseModel):
             r (float): Radial coordinate.
             phi (float): Azimuthal coordinate.
 
-            Returns:
+        Returns:
             np.ndarray: The elliptical basis metric, a 3x3 matrix.
         """
         elliptical_basis: np.ndarray = self.get_elliptical_basis(r=r, phi=phi, unit_basis=True)
@@ -146,14 +146,23 @@ class EllipticalCylindricalModel(MFRBaseModel):
         Returns:
             float: The value of the ellipse equation at the given coordinates.
         """
-        # TODO: We need to account for psi and R as well. Because this is not used at the moment, we can ignore it.
+        # TODO: We need to account for xi and R as well. Because this is not used at the moment, we can ignore it.
         raise NotImplementedError()
         # return (self.delta * x) ** 2 + y**2 - self.R**2
 
     def convert_elliptical_to_cartesian_coordinates(
         self, r: float | np.ndarray, phi: float | np.ndarray, z: float | np.ndarray
     ) -> np.ndarray:
-        """Convert from elliptical coordinates (r, phi, z) to Cartesian."""
+        """Convert from elliptical coordinates (r, phi, z) to Cartesian.
+        
+        Args:
+            r (float | np.ndarray): Radial coordinate.
+            phi (float | np.ndarray): Azimuthal coordinate.
+            z (float | np.ndarray): Axial coordinate.
+
+        Returns:
+            float | np.ndarray: The converted Cartesian coordinates: x, y and z.
+        """
         x = self.delta * r * np.cos(phi)
         y = r * np.sin(phi)
         return (self.psi_rotation_matrix @ np.array([x, y, z])).T
@@ -170,7 +179,7 @@ class EllipticalCylindricalModel(MFRBaseModel):
         Returns:
             np.ndarray: array containing the corresponding elliptical coordinates [r, phi, z].
         """
-        # Rotate the Cartesian coordinates by -psi.
+        # Rotate the Cartesian coordinates by -xi.
         xyz_rot = self.psi_rotation_matrix_inverse @ np.array([x, y, z])
         x_rot = xyz_rot[0]
         y_rot = xyz_rot[1]
@@ -200,12 +209,12 @@ class EllipticalCylindricalModel(MFRBaseModel):
         elliptical_basis: np.ndarray = self.get_elliptical_basis(r=r, phi=phi, unit_basis=True)
         return np.sqrt(np.sum(np.square(elliptical_basis), axis=0))
     
-    def get_h(self, phi: float) -> float:
+    def get_h(self, phi: float | np.ndarray) -> float | np.ndarray:
         """Calculate the "h" factor, defined so that (h_phi)^2 = r^2 * h^2 (eq. 5 in the 2018 EC Model article).
         Note that h is not constant, but a function of phi. Also note that h is never zero."""
-        sin_phi: float = math.sin(phi)
-        cos_phi: float = math.cos(phi)
-        return math.sqrt(self.delta_squared * sin_phi * sin_phi + cos_phi * cos_phi)
+        sin_phi: float | np.ndarray = np.sin(phi)
+        cos_phi: float | np.ndarray = np.cos(phi)
+        return np.sqrt(self.delta_squared * sin_phi * sin_phi + cos_phi * cos_phi)
 
     def get_chi(self, phi: float | None = None, h: float | None = None) -> float:
         if phi is None and h is None:
@@ -213,7 +222,7 @@ class EllipticalCylindricalModel(MFRBaseModel):
         
         # We could recompute "h" here, but if "h" is already provided, we can use it directly to avoid unnecessary calculations.
         if h is None:
-            h: float = self.get_h(phi)
+            h: float = self.get_h(xi=phi)
 
         return (self.delta_squared + 1) / (h * h)
     
@@ -236,7 +245,7 @@ class EllipticalCylindricalModel(MFRBaseModel):
                                 normalise_radial_coordinate: bool = False,
                                 two_fold: bool = False,
                                 plot: bool = False,
-                                fig_size: tuple[float, float] | None = None) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+                                fig_size: tuple[float, float] | None = None) -> dict[str, np.ndarray]:
         r_range: np.ndarray = np.linspace(0, self.R, num_points, endpoint=True)
         phi_range: np.ndarray = phi * np.ones_like(r_range)
         B_field: np.ndarray = np.zeros((len(r_range), 3))
@@ -321,14 +330,15 @@ class EllipticalCylindricalModel(MFRBaseModel):
 
             plt.show()
 
-        return r_range, B_field, J_field, F_field
+        sweep = {"r": r_range, "B": B_field, "J": J_field, "F": F_field}
+        return sweep
     
     def radial_and_angular_sweep(self,
                                  r_num_points: int = 51,
                                  phi_num_points: int = 51,
                                  normalise_radial_coordinate: bool = False,
                                  plot: bool = False,
-                                 fig_size: tuple[float, float] | None = None) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+                                 fig_size: tuple[float, float] | None = None) -> dict[str, np.ndarray]:
         """Make a radial (r) and angular (phi) sweep of the magnetic field (B) and current density (J).
 
         Args:
@@ -344,10 +354,10 @@ class EllipticalCylindricalModel(MFRBaseModel):
         r_range, phi_range = self._get_ellipse_filling(r_num_points, phi_num_points)
 
         # Initialise variables
-        x = np.zeros((r_num_points, phi_num_points))
-        y = np.zeros((r_num_points, phi_num_points))
-        B_field = np.zeros((r_num_points, phi_num_points, 3))
-        J_field = np.zeros((r_num_points, phi_num_points, 3))
+        x: np.ndarray = np.zeros((r_num_points, phi_num_points))
+        y: np.ndarray = np.zeros((r_num_points, phi_num_points))
+        B_field: np.ndarray = np.zeros((r_num_points, phi_num_points, 3))
+        J_field: np.ndarray = np.zeros((r_num_points, phi_num_points, 3))
 
         # Loop over the 2D sweep.
         for r_idx, r in enumerate(r_range):
@@ -421,7 +431,8 @@ class EllipticalCylindricalModel(MFRBaseModel):
             fig.suptitle("Radial and angular sweep")
             plt.show()
 
-        return x, y, B_field, J_field
+        sweep = {"x": x, "y": y, "B": B_field, "J": J_field}
+        return sweep
     
     def get_boundary(self, num_points: int = 101) -> np.ndarray:
         """Calculate the boundary of the ellipse in Cartesian coordinates."""
@@ -438,7 +449,8 @@ class EllipticalCylindricalModel(MFRBaseModel):
 
         # Create the angular range.
         phi_range: np.ndarray = np.linspace(start=0, stop=2*math.pi, num=phi_num_points, endpoint=True)
-
+        
+        # TODO: Return the area elements as well, so numerical integration can be performed if needed.
         return r_range, phi_range
 
     def plot_mfr_boundary(
@@ -447,7 +459,7 @@ class EllipticalCylindricalModel(MFRBaseModel):
         normalise_radial_coordinate: bool = False,
         fig_size: tuple[float, float] | None = None,
         axis: plt.Axes | None = None
-    ) -> None:
+    ) -> plt.Axes:
         if boundary is None:
             boundary = self.get_boundary()
         
@@ -456,6 +468,7 @@ class EllipticalCylindricalModel(MFRBaseModel):
 
         scale_factor: float = 1 / self.R if normalise_radial_coordinate else 1.0
 
+        # Initialise the plot fg
         if axis is None:
             fig, ax = plt.subplots(tight_layout=True, figsize=fig_size)
         else:
@@ -472,13 +485,17 @@ class EllipticalCylindricalModel(MFRBaseModel):
             legend.extend(list(vector_dict.keys()))
 
         ax.legend(legend)
+
+        # Draw the non-rotated Cartesian axes.
         ax.axhline(y=0, color="k", alpha=0.35)
         ax.axvline(x=0, color="k", alpha=0.35)
 
-        if self.psi > 1e-5:
-            # If psi is not zero, the natural axis of the MFR are angled with an angle psi.
-            ax.axline((0, 0), slope=math.tan(self.psi), color="g", alpha=0.5, label="Natural MFR axis")
-            ax.axline((0, 0), slope=-1 / math.tan(self.psi), color="g", alpha=0.5)
+        # Draw the natural MFR axes if they are different than the non-rotated Cartesian ones.
+        if self.xi > 1e-5:
+            # If xi is not zero, the natural axis of the MFR are angled with an angle xi.
+            ax.axline((0, 0), slope=math.tan(self.xi), color="g", alpha=0.5, label="Natural MFR axis")
+            ax.axline((0, 0), slope=-1 / math.tan(self.xi), color="g", alpha=0.5)
+        
         ax.set_aspect("equal")
         ax.grid(alpha=0.35)
 
@@ -492,6 +509,8 @@ class EllipticalCylindricalModel(MFRBaseModel):
         ax.set_title("Magnetic flux rope boundary")
         if axis is None:
             plt.show()
+        
+        return ax
     
     def plot_crossing_trajectory(self, df: pd.DataFrame) -> None:
         """
@@ -528,8 +547,8 @@ class EllipticalCylindricalModel(MFRBaseModel):
         ax[1].scatter(df["x"][0], df["z"][0], c="k", marker="x", label="Entry point")
         ax[1].scatter(df["x"][N - 1], df["z"][N - 1], c="m", marker="x", label="Exit point")
         ax[1].legend()
-        ax[1].set_xlabel("x [AU]")
-        ax[1].set_ylabel("z [AU]")
+        ax[1].set_xlabel("x (AU)")
+        ax[1].set_ylabel("z (AU)")
         ax[1].set_title("Lateral view of the trajectory")
         ax[1].axis("equal")
         ax[1].grid(alpha=0.35)
@@ -538,9 +557,9 @@ class EllipticalCylindricalModel(MFRBaseModel):
     def find_intersection_points_rot(self, y_0: float, theta: float) -> tuple[np.ndarray | None, np.ndarray | None]:
         # The trajectory will pass through [0, y_0, 0].
         # Compute the intersection of the elliptical cylinder with the line of equation (x, y, z) = (0, y_0, 0) + (cos(\theta), 0, \sin(theta))*\lambda
-        cos_psi = math.cos(self.psi)
+        cos_psi = math.cos(self.xi)
         cos_psi_2 = cos_psi * cos_psi
-        sin_psi = math.sin(self.psi)
+        sin_psi = math.sin(self.xi)
         sin_psi_2 = sin_psi * sin_psi
         R_2 = self.R * self.R
         delta_2 = self.delta * self.delta
@@ -562,6 +581,7 @@ class EllipticalCylindricalModel(MFRBaseModel):
         if discriminant < 0:
             # No intersection points.
             return None, None
+
         discriminant_sqrt = math.sqrt(discriminant)
         lambda1 = (-b - discriminant_sqrt) / (2 * a)
         lambda2 = (-b + discriminant_sqrt) / (2 * a)
@@ -594,7 +614,7 @@ class EllipticalCylindricalModel(MFRBaseModel):
         # Where lambda is the parameter. Actually, lambda is just v_sc * (t - t*), where t* is the time at the centre
         # (y = y_0) of the flux rope.
 
-        # Equation of the rope boundary (r = R) when the psi angle is 0, is:
+        # Equation of the rope boundary (r = R) when the xi angle is 0, is:
         # x = delta * R * cos(phi)
         # y = R * sin(phi)
 
@@ -603,17 +623,17 @@ class EllipticalCylindricalModel(MFRBaseModel):
         # If a rotation is applied, then.
 
 
-        # If we apply the psi rotation matrix, we get:
-        # x' = delta * R * cos(phi) * cos (psi) - R * sin(phi) * sin(psi)
-        # y' = delta * R * cos(phi) * sin (psi) + R * sin(phi) * cos(psi)
+        # If we apply the xi rotation matrix, we get:
+        # x' = delta * R * cos(phi) * cos (xi) - R * sin(phi) * sin(xi)
+        # y' = delta * R * cos(phi) * sin (xi) + R * sin(phi) * cos(xi)
 
-        # We set y' = y_0 and solve for psi. We obtain two solutions:
-        # psi = arctan(cotan(psi) / delta) +- arccos(y_0 / (R * sqrt(delta^2 * sin^2(psi) + cos^2(psi))))
+        # We set y' = y_0 and solve for xi. We obtain two solutions:
+        # xi = arctan(cotan(xi) / delta) +- arccos(y_0 / (R * sqrt(delta^2 * sin^2(xi) + cos^2(xi))))
         # We note that the last term is exactly equal to the scale factor h(phi), which can simplify the expression:
-        # psi = arctan(cotan(psi) / delta) +- arccos(y_0 / (R * h(psi)))
+        # xi = arctan(cotan(xi) / delta) +- arccos(y_0 / (R * h(xi)))
 
         # We note that for the circular-cylindrical case (delta = 1), we get a solution that suits what we would expect:
-        # psi = arctan(cotan(0)) +- arccos(y_0 / R) = (pi / 2) +- arccos(y_0 / R)
+        # xi = arctan(cotan(0)) +- arccos(y_0 / R) = (pi / 2) +- arccos(y_0 / R)
 
         entry_point, exit_point = self.find_intersection_points_rot(y_0, theta)
 
@@ -642,23 +662,28 @@ class EllipticalCylindricalModel(MFRBaseModel):
     def _validate_crossing_parameters(self, y_0: float, theta: float, time_stencil: int) -> None:
         # Parameter: y_0.
         if not isinstance(y_0, (int, float)):
-            raise TypeError("Parameter: y_0 must be an integer or float.")
+            raise TypeError(f"Parameter: y_0 must be an integer or float, but {type(y_0)} was supplied.")
 
         if not (-1.0 < y_0 < 1.0):
-            raise ValueError("Parameter: y_0 must be in (-1.0, 1.0).")
+            raise ValueError(f"Parameter: y_0 must be in (-1.0, 1.0), but {y_0} was supplied.")
         
         # Parameter: theta.
         if not isinstance(theta, (int, float)):
-            raise TypeError("Parameter: theta must be an integer or float.")
+            raise TypeError(f"Parameter: theta must be an integer or float, but {type(theta)} was supplied.")
         
         if not (-math.pi/2 < theta < math.pi / 2):
-            raise TypeError("Parameter: theta must be in range (-pi/2, pi/2).")
+            raise ValueError(f"Parameter: theta must be in range (-pi/2, pi/2), but {theta} was supplied.")
         
         # Parameter: time_stencil.
         if not isinstance(time_stencil, (int, list, tuple, pd.Series, np.ndarray)):
-            raise TypeError("Parameter: time_stencil must be an integer or array.")
+            raise TypeError(f"Parameter: time_stencil must be an integer or array, but {type(time_stencil)} was provided.")
         
         # Assert number grater that 5 or array increasing.
+        if isinstance(time_stencil, int) and time_stencil < 5:
+            raise ValueError(f"The MFR crossing cannot have less that 5 data points, but {time_stencil} were supplied.")
+
+        if isinstance(time_stencil, (list, tuple, pd.Series, np.ndarray)) and  not np.all(np.diff(time_stencil) > 0):
+            raise ValueError("When a vector 'time_stencil' is supplied, it must be strictly increasing.")
 
     def simulate_crossing(self,
                           v_sc: float,
@@ -748,6 +773,7 @@ class EllipticalCylindricalModel(MFRBaseModel):
             B_field[:, 2] += noise_generator.generate_noise(num_points)
 
             if not is_fitting:
+                # The current density is not used for the fitting, so there is no need to compute it.
                 J_field[:, 0] += noise_generator.generate_noise(num_points)
                 J_field[:, 1] += noise_generator.generate_noise(num_points)
                 J_field[:, 2] += noise_generator.generate_noise(num_points)
@@ -794,15 +820,15 @@ class EllipticalCylindricalModel(MFRBaseModel):
     def convert_local_to_gse_coordinates(gamma: float, theta: float) -> np.ndarray:
         # Longitude: gamma -> angle of MFR x-axis with respect to the GSE x-axis.
         # Latitude: theta -> angle of MFR z-axis with respect to the GSE y-axis.
-        cos_gamma = math.cos(gamma)
-        sin_gamma = math.sin(gamma)
+        cos_gamma: float = math.cos(gamma)
+        sin_gamma: float = math.sin(gamma)
 
-        cos_theta = math.cos(theta)
-        sin_theta = math.sin(theta)
+        cos_theta: float = math.cos(theta)
+        sin_theta: float = math.sin(theta)
 
         return np.array([[cos_gamma, sin_gamma * sin_theta, -sin_gamma * cos_theta],
-                        [sin_gamma, -cos_gamma * sin_theta, cos_gamma * cos_theta],
-                        [0, cos_theta, sin_theta]])
+                         [sin_gamma, -cos_gamma * sin_theta, cos_gamma * cos_theta],
+                         [0, cos_theta, sin_theta]])
         
     @abc.abstractmethod
     def get_magnetic_field_elliptical_coordinates(self, r: float, phi: float) -> np.ndarray:
