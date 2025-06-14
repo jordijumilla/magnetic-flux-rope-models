@@ -14,13 +14,14 @@ class ECModel(EllipticalCylindricalModel):
 
     def __init__(
         self,
+        *,
         delta: float,
         xi: float,
         R: float = 0.05,
         n: int = 1,
         m: int = 0,
-        C_nm: float = 1.0,
         tau: float = 1.3,
+        C_nm: float = 1.0,
         B_z_0: float = 10.0,
         handedness: int = 1,
     ) -> None:
