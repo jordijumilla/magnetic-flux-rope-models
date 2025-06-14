@@ -30,16 +30,16 @@ class ECModel(EllipticalCylindricalModel):
 
         Args:
             delta (float): Ellipticity of the flux rope. Ratio between the lengths of the minor and major axes of the elliptical cross section. Valid range: (0, 1].
-            xi (float): Angle of rotation about the central axis of the flux rope, in radians. Valid range: [0, π].
+            xi (float): Angle of rotation about the central axis of the flux rope (propagation angle), in radians. Valid range: [0, π].
             R (float, optional): Radius of the semi-major axis in Astronomical Units (AU). Default is 0.05.
-            n (int, optional): Model parameter n. Default is 1.
-            m (int, optional): Model parameter m. Default is 0.
-            C_nm (float, optional): Model parameter C_nm. Must be > 0. Default is 1.0.
-            tau (float, optional): Model parameter tau. Default is 1.3.
-            B_z_0 (float, optional): Central axial magnetic field strength in nT. Default is 10.0.
+            n (int, optional): Model parameter n. Must be greater or equal to 1. Default is 1.
+            m (int, optional): Model parameter m. Must be greater than or equal to 0. Default is 0.
+            tau (float, optional): Dimensionless model parameter tau. Default is 1.3.
+            C_nm (float, optional): Dimensionless model parameter C_nm. Must be > 0. Default is 1.0.
+            B_z_0 (float, optional): Central axial magnetic field strength in nT, that is, B_z(r=R). Default is 10.0 nT.
             handedness (int, optional): Handedness of the flux rope. Must be -1 or 1. Default is 1.
         """
-        # Initialise the EllipticalCylindricalModel superclass.
+        # Initialise the EllipticalCylindricalModel superclass with the geometrical parameters.
         super().__init__(delta=delta, R=R, xi=xi)
 
         # EC Model field parameters.
@@ -53,9 +53,8 @@ class ECModel(EllipticalCylindricalModel):
         # Validate the incoming user-defined parameters.
         self._validate_parameters()
 
-        # Pre-compute alpha_n and beta_m parameters.
+        # Convert tau, C_nm and B_z^0 into alpha_n and beta_m.
         self.alpha_n: float = self.B_z_0 * (self.n + 1) / (self.mu_0 * self.delta * self.tau * math.pow(self.R * self.AU_to_m, self.n + 1))
-        #self.beta_m: float = self.alpha_n * math.pow(self.R * self.AU_to_m, self.n - self.m) / C_nm
         self.beta_m: float = self.B_z_0 * (self.n + 1) / (self.mu_0 * self.delta * self.C_nm * self.tau * math.pow(self.R * self.AU_to_m, self.m + 1))
 
         # Create a dictionary with the units used for each magnitude.
@@ -125,22 +124,27 @@ class ECModel(EllipticalCylindricalModel):
         """Calculate the magnetic field in the elliptical vector basis."""
         B_r: float = 0
 
+        # Convert r from AU to meters.
+        r_AU: float = r * self.AU_to_m
+
+        # Note that B_phi depends on both r and phi.
         B_phi: float = (
             -self.handedness
             * self.mu_0
-            * self.get_h(phi)
+            * self.get_h(phi=phi)
             * self.delta
             * self.beta_m
-            * math.pow(r  * self.AU_to_m, self.m + 1)
+            * math.pow(r_AU, self.m + 1)
             / (self.delta_squared + self.m + 1)
         )
 
+        # Note that B_z depends only on r.
         B_z: float = (
             self.B_z_0 -
             self.mu_0
             * self.delta
             * self.alpha_n
-            * math.pow(r * self.AU_to_m, self.n + 1)
+            * math.pow(r_AU, self.n + 1)
             / (self.n + 1)
         )
 
@@ -160,6 +164,15 @@ class ECModel(EllipticalCylindricalModel):
         return np.array([J_r, J_phi, J_z]) / 1e9
 
     def get_twist(self, r: float, phi: float, L: float | None = None) -> float:
+        """Calculate the twist of the flux rope at a given radius and azimuthal angle.
+        The twist is defined as the ratio of the azimuthal component of the curl of the magnetic field to the axial component of the magnetic field.
+        Args:
+            r (float): Radial coordinate in Astronomical Units (AU).
+            phi (float): Azimuthal coordinate in radians.
+            L (float | None, optional): Length of the flux rope. If None, it defaults to 2 * pi * R. Default is None.
+        Returns:
+            float: The twist of the flux rope at the given radius and azimuthal angle.
+        """
         B_field_elliptical = self.get_magnetic_field_elliptical_coordinates(r=r, phi=phi)
 
         # Convert the magnetic field from elliptical to cartesian coordinates
