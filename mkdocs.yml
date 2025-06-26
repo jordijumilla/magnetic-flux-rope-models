@@ -50,7 +50,7 @@ plugins:
             show_source: true
             extra:
               source:
-                repo_url: https://github.com/jordi-jumilla-lorenz/magnetic-flux-rope-models
+                repo_url: https://github.com/jordijumilla/magnetic-flux-rope-models
                 branch: master
                 path_template: "{filepath}#L{lineno}"
 
