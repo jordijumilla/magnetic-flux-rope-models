@@ -22,11 +22,13 @@ jobs:
         run: |
           pip install mkdocs mkdocs-material mkdocstrings[python]
 
-      - name: Set up credentials for GitHub Pages deployment
+      - name: Set up Git credentials
         run: |
-          git config user.name "${{ github.actor }}"
-          git config user.email "${{ github.actor }}@users.noreply.github.com"
-          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
+          git config --global user.name "${{ github.actor }}"
+          git config --global user.email "${{ github.actor }}@users.noreply.github.com"
 
       - name: Deploy to GitHub Pages
-        run: mkdocs gh-deploy --force
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdocs gh-deploy --force --remote-branch gh-pages --remote-name origin
