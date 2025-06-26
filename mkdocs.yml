@@ -1,5 +1,5 @@
 site_name: Magnetic Flux Rope Models
-repo_url: https://github.com/jordi-jumilla-lorenz/magnetic-flux-rope-models
+repo_url: https://github.com/jordijumilla/magnetic-flux-rope-models
 repo_name: Go to the repository
 site_description: A Python package for simulating and analyzing magnetic flux ropes in astrophysical contexts.
 site_author: Jordi Jumilla Lorenz
