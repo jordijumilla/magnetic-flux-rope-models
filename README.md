@@ -8,10 +8,11 @@ explore and visualise the models, simulate synthetic data from spacecraft or fit
 It can also be used as artifical input for other processes such as the Grad-Shafranov reconstruction technique, or machine learning models.
 
 # Details:
-- 👨🏽‍💻 __Author & developer__: [Jordi Jumilla Lorenz](https://github.com/jordijumilla/jordijumilla).
+- 👨🏽‍💻 __Author & developer__: [Jordi Jumilla Lorenz](https://github.com/jordijumilla/jordijumilla)
+- 📄 __Documentation__: read this project's [documentation](https://jordijumilla.github.io/magnetic-flux-rope-models)
 - 🎓 __Associations__: this code has been developed as part of the Data Science Master's thesis named "A novel magnetic flux rope simulation and analysis tool", at [Universitat Oberta de Catalunya](https://www.uoc.edu) with association with the [Heliophysics Department at NASA Goddard Space Flight Center](https://science.nasa.gov/heliophysics).
-- 🤝 __Collaboration__: if you want to use this tool or contribute to it, please let me know.
-- 🪪 __License__: this Python library is published under the __GNU General Public License v3.0__ license.
+- 🤝 __Collaboration__: if you want to use this tool or contribute to it, please let me know
+- 🪪 __License__: this Python library is published under the __GNU General Public License v3.0__ license
 
 # Getting started:
 
