@@ -4,9 +4,13 @@ The __Magnetic Flux Rope Models__ is a `Python` package whose aim is to provide 
 explore and visualise the models, and also as artifical input for other processes such as the Grad-Shafranov reconstruction technique, or machine learning models.
 
 __Details__:
+
 - 👨🏽‍💻 __Author & developer__: [Jordi Jumilla Lorenz](https://github.com/jordijumilla/jordijumilla).
+
 - 🎓 __Associations__: this code has been developed as part of the Data Science Master's thesis named "A novel magnetic flux rope simulation and analysis tool", at [Universitat Oberta de Catalunya](https://www.uoc.edu) with association with the [Heliophysics Department at NASA Goddard Space Flight Center](https://science.nasa.gov/heliophysics).
+
 - 🤝 __Collaboration__: if you want to use this tool or contribute to it, please let me know.
+
 - 🪪 __License__: this Python library is published under the __GNU General Public License v3.0__ license.
 
 
@@ -16,14 +20,19 @@ __Details__:
 This library contains an interface named *__InterfaceMFRModel__* which is an abstract class from which all magnetic flux models should be derived.
 
 Methods that __must__ be implemented:
+
 - `__init__`: standard method for instance initialisation.
+
 - `_validate_params`: method to validate the user-defined parameters. This adds a layer of data validity.
+
 - `simulate_crossing`: method to simulate a spacecraft crossing across the magnetic flux rope.
 
 This interface also provides a __noise generator__ method called `get_noise_generator`, which can be used to generate reproducible pseudo-random samples. This is especially useful when trying to simulate the measurement errors from spacecraft.
 
 Noise types currently supported:
+
 - Uniform
+
 - Gaussian
 
 ## Elliptical-cylindrical (EC) model
